@@ -72,6 +72,8 @@ cleanup commands and their `env`.
 - **workers** are told, in the task, that this is a shared real development project, that every account
   must start with `cac-<run-id>-`, and that they must not touch anything else. Several runs can share the
   project because their prefixes differ.
+- **native suites** sign up with their own accounts (the example app uses a `uitest-` prefix). Make the
+  cleanup sweep those too — e.g. `APP_SWEEP_PREFIX={account_prefix},uitest-` — and do not overlap two full runs.
 - **before the gate** — the cleanup command deletes every account whose email starts with the prefix and
   all of its data (trees with their people, events, memories and photos; profile document; email index;
   pending invites). The `verify` command then re-lists the prefix; it must find **0**.
