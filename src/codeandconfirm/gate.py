@@ -61,14 +61,18 @@ def repo_key(repo_root: str | Path) -> str:
 
 
 _TEST_PATH_HINTS = ("uitests", "/test/", "/tests/", "androidtest", "__tests__", "/spec/")
+# Operations tooling next to product code: sweep/seed scripts, per-environment configs, CI — not behaviour a
+# device worker can exercise, so a change there asks for no diff-derived scenario.
+_OPS_PATH_HINTS = ("/scripts/", "/config/", "/.github/", ".github/", "/seed/", "/seed-bulk/")
+_NON_CODE_SUFFIXES = (".md", ".txt", ".png", ".jpg", ".toml", ".yml", ".yaml", ".lock", ".json")
 
 
 def platform_touched(changed_files: list[str], platform: str) -> bool:
-    """Does the diff change product code that runs on `platform`? Test-only and docs-only changes do not count;
-    shared backend code (rules, functions, mock server) counts for every platform."""
+    """Does the diff change product code that runs on `platform`? Test-only, docs-only, config and operations
+    tooling changes do not count; shared backend code (rules, functions, mock server) counts for every platform."""
     for f in changed_files or []:
         fl = f.lower()
-        if any(h in fl for h in _TEST_PATH_HINTS) or fl.endswith((".md", ".txt", ".png", ".jpg")):
+        if any(h in fl for h in _TEST_PATH_HINTS) or any(h in fl for h in _OPS_PATH_HINTS) or fl.endswith(_NON_CODE_SUFFIXES):
             continue
         if platform == "ios" and (fl.startswith("ios/") or fl.endswith(".swift")):
             return True

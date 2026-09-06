@@ -65,6 +65,10 @@ def test_platform_touched_ignores_tests_and_docs():
     assert not platform_touched(["ios/App/AppUITests/AppUITests.swift", "docs/features/x.md"], "ios")
     assert not platform_touched(["android/app/src/androidTest/java/x/UiTest.kt"], "android")
     assert platform_touched(["firebase/firestore.rules"], "ios") and platform_touched(["firebase/firestore.rules"], "android")
+    assert platform_touched(["firebase/functions/index.js"], "android")
+    # operations tooling, configs and CI next to product code ask for no device scenario
+    assert not platform_touched(["firebase/functions/scripts/sweep.js", "firebase/functions/scripts/cleanup.js"], "ios")
+    assert not platform_touched(["firebase/config/README.md", "codeandconfirm.toml", ".github/workflows/x.yml", "android/app/google-services.json"], "android")
     assert not platform_touched([], "ios")
 
 
