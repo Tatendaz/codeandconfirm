@@ -5,30 +5,43 @@
 # protection as a required check. A new head commit has no status, so a stale PASS cannot be merged.
 # The status is published from the machine that ran QA with the developer's `gh` token: this proves
 # a run happened for that SHA, not that the machine was trustworthy — see docs/trust-boundaries.md.
+# Two triggers: the pull_request events (a new head has no verdict yet → the check goes red) and the
+# `status` event, so publishing `codeandconfirm/qa` for that head later re-evaluates the check without a
+# manual re-run. `status` workflows run from the default branch, so this half is active once the file is
+# on main. Simplest alternative when the ruleset allows it: require the commit status `codeandconfirm/qa`
+# itself as the required check and skip this workflow.
 name: CodeAndConfirm required
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  status: {}
 permissions:
   contents: read
   statuses: read
+  pull-requests: read
 jobs:
   verdict:
     name: CodeAndConfirm verdict present for head
+    if: github.event_name == 'pull_request' || github.event.context == 'codeandconfirm/qa'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Look up the status on the head SHA
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.pull_request.head.sha }}
+          SHA: ${{ github.event_name == 'status' && github.event.sha || github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           CONTEXT: codeandconfirm/qa
         run: |
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number' 2>/dev/null || true)
+            if [ -z "$PR_NUMBER" ]; then echo "commit $SHA is on no open pull request; nothing to gate"; exit 0; fi
+          fi
           state=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .state" | head -1)
           desc=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .description" | head -1)
           echo "head=$SHA context=$CONTEXT state=${state:-none} description=${desc:-}"
           if [ "$state" != "success" ]; then
-            echo "::error::No passing CodeAndConfirm verdict for $SHA (state=${state:-none}). Run: codeandconfirm review --pr ${{ github.event.pull_request.number }} --publish"
+            echo "::error::No passing CodeAndConfirm verdict for $SHA (state=${state:-none}). Run: codeandconfirm review --pr $PR_NUMBER --publish"
             exit 1
           fi

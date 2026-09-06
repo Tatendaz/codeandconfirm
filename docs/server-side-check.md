@@ -4,6 +4,9 @@ Local hooks are advisory: `git push --no-verify`, a different terminal, or a byp
 The durable enforcement point is branch protection on the server.
 
 1. Copy `examples/github/codeandconfirm-required.yml` from this repository into the target repository.
+   It runs on pull-request events and on the `status` event, so the check turns green when `codeandconfirm/qa`
+   is published later for the same head (the `status` half is active once the workflow is on the default branch).
+   If your ruleset can require a commit status directly, requiring `codeandconfirm/qa` itself is simpler still.
 2. Run reviews for PRs with `codeandconfirm review --pr <n> --publish`. On completion the coordinator posts:
    - a PR comment containing the report (truncated to 60 kB; screenshots stay local), and
    - a **commit status** on the tested head SHA with context `codeandconfirm/qa` and state
