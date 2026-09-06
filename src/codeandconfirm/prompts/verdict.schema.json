@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CodeAndConfirm worker verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "worker",
+    "verdict",
+    "summary",
+    "scenarios",
+    "findings",
+    "untested",
+    "blockers",
+    "test_patches",
+    "commands_run",
+    "model_self_report"
+  ],
+  "properties": {
+    "worker": {
+      "type": "string",
+      "description": "Worker name exactly as given in the task (review|ios|android)."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "description": "Three to eight sentences. What was tested, what was found, what could not be tested."
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "status",
+          "steps",
+          "evidence",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Journey id from the task (e.g. auth.signup) or a new diff-derived id (diff.<slug>)."
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "skipped",
+              "blocked"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "File names inside the evidence directory (screenshots, logs)."
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "title",
+          "description",
+          "platform",
+          "reproduction",
+          "evidence",
+          "compared_to_base",
+          "suggested_regression_test",
+          "base_behavior"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "correctness",
+              "security",
+              "data-integrity",
+              "performance",
+              "ux",
+              "accessibility",
+              "visual",
+              "deployment",
+              "test-gap",
+              "infra",
+              "other"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "both",
+              "backend",
+              "n/a"
+            ]
+          },
+          "reproduction": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Concrete numbered steps a human can follow."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "compared_to_base": {
+            "type": "string",
+            "description": "What the base revision does for the same steps, or 'not compared'."
+          },
+          "suggested_regression_test": {
+            "type": "string"
+          },
+          "base_behavior": {
+            "type": "string",
+            "enum": [
+              "same",
+              "different",
+              "not-reproduced",
+              "not compared"
+            ],
+            "description": "Result of reproducing the same steps on the base build: same = base has the identical defect (pre-existing); different = base behaves correctly (regression); not-reproduced = the triggering condition did not occur on base; not compared = no base build used."
+          }
+        }
+      }
+    },
+    "untested": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Areas you did not or could not cover, with the reason."
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Infrastructure or environment problems that prevented coverage."
+    },
+    "test_patches": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "File names of test-only patches you wrote to the patches directory."
+    },
+    "commands_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The important commands you executed (suites, builds, logs)."
+    },
+    "model_self_report": {
+      "type": "string",
+      "description": "Which model you believe you are; the coordinator verifies this independently."
+    }
+  }
+}

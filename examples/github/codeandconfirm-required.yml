@@ -1,0 +1,34 @@
+# Server-side backstop (copy into the TARGET repository).
+#
+# Requires that the PR head commit carries a CodeAndConfirm commit status (context `codeandconfirm/qa`,
+# state success) published by `codeandconfirm review --pr <n> --publish`. Add this job to branch
+# protection as a required check. A new head commit has no status, so a stale PASS cannot be merged.
+# The status is published from the machine that ran QA with the developer's `gh` token: this proves
+# a run happened for that SHA, not that the machine was trustworthy — see docs/trust-boundaries.md.
+name: CodeAndConfirm required
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  statuses: read
+jobs:
+  verdict:
+    name: CodeAndConfirm verdict present for head
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Look up the status on the head SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          CONTEXT: codeandconfirm/qa
+        run: |
+          state=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .state" | head -1)
+          desc=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .description" | head -1)
+          echo "head=$SHA context=$CONTEXT state=${state:-none} description=${desc:-}"
+          if [ "$state" != "success" ]; then
+            echo "::error::No passing CodeAndConfirm verdict for $SHA (state=${state:-none}). Run: codeandconfirm review --pr ${{ github.event.pull_request.number }} --publish"
+            exit 1
+          fi

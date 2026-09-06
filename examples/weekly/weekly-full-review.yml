@@ -1,0 +1,46 @@
+# GitHub Actions example: weekly full CodeAndConfirm review on a self-hosted macOS runner.
+#
+# The runner needs Xcode, the Android SDK, Codex CLI signed in, and CodeAndConfirm installed
+# (`uv pip install -e .` in a checkout). For the `full` profile's real backend it also needs the
+# machine-local pieces in ~/.codeandconfirm/config.toml: backend.config_source (real client configs)
+# and backend.cleanup.credentials (a service-account key of the development project only).
+# Nothing secret lives in this file or in the repository.
+name: Weekly · CodeAndConfirm full review
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'          # Sundays 03:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeandconfirm-weekly-full
+  cancel-in-progress: false
+
+jobs:
+  full-review:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Full review (profile full) against last week's tested commit
+        env:
+          PATH: ${{ env.HOME }}/codeandconfirm/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+        run: bash "$HOME/codeandconfirm/examples/weekly/weekly-full-review.sh" "$GITHUB_WORKSPACE" "${GITHUB_REF_NAME:-main}"
+      - name: Collect the report
+        if: always()
+        run: |
+          RUN_ID=$(codeandconfirm status --limit 1 | awk 'NR==1{print $1}')
+          mkdir -p "$RUNNER_TEMP/codeandconfirm"
+          cp "$HOME/.codeandconfirm/runs/$RUN_ID/report.md" "$HOME/.codeandconfirm/runs/$RUN_ID/report.json" "$RUNNER_TEMP/codeandconfirm/" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeandconfirm-weekly-report
+          path: ${{ runner.temp }}/codeandconfirm
+          retention-days: 14

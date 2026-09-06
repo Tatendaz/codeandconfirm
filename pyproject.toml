@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codeandconfirm"
+version = "0.1.0"
+description = "One agent builds, the other tries to break it. Claude Code implements; an independent Codex QA worker reviews and tests before a PR is opened or updated."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "CodeAndConfirm contributors" }]
+keywords = ["qa", "code-review", "claude-code", "codex", "mobile-testing", "ios", "android"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+codeandconfirm = "codeandconfirm.cli:main"
+ccdevice = "codeandconfirm.device.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Tatendaz/codeandconfirm"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codeandconfirm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

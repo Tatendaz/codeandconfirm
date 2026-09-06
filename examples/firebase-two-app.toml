@@ -1,0 +1,165 @@
+# codeandconfirm.toml for a two-app Firebase project (iOS SwiftUI + Android Compose).
+# Adapted from the configuration of the first integration target (a family-tree app) with generic names.
+# It contains placeholders only; machine-specific values live in .codeandconfirm.local.toml.
+
+[project]
+name = "my-two-app-project"
+default_base = "main"
+default_profile = "pr"          # `codeandconfirm review --profile pr|full`; see [profiles.*] at the end
+
+[codex]
+model = "gpt-6-astra"
+reasoning_effort = "high"
+
+[qa]
+platforms = ["ios", "android"]
+parallel_platforms = true
+static_review = true
+required_suites = ["ios-ui-smoke", "android-ui-smoke", "android-unit", "ios-logic", "mock-server-unit"]
+required_journeys = ["auth.signup", "tree.create-once", "person.add", "nav.tree-back", "app.restart-persistence"]
+min_interactions_per_platform = 8
+block_severity = "high"
+max_repair_cycles = 5
+timeout_minutes = 120
+worker_timeout_minutes = 60
+
+[backend]
+kind = "firebase-emulator"
+workdir = "firebase"
+prepare = ["cd firebase/functions && npm install --no-audit --no-fund"]
+start = "firebase emulators:start --project demo-project --only auth,firestore,storage,functions --import=./seed"
+env = { JAVA_HOME = "{jdk21_home}" }
+ports = { auth = 9099, firestore = 8080, storage = 9199, functions = 5001 }
+health = ["http://127.0.0.1:{auth_port}/", "http://127.0.0.1:{firestore_port}/"]
+# The Android debug app hardcodes 10.0.2.2:<default ports>; iOS accepts APP_EMULATOR_*_PORT build
+# settings. Until Android reads ports from instrumentation args, one emulator-backed run at a time.
+port_isolation = "ios-only"
+
+[platforms.ios]
+# A pool: concurrent runs take the first free simulator (created on demand from device_type).
+device_names = ["CodeAndConfirm iPhone", "CodeAndConfirm iPhone 2"]
+device_type = "iPhone 17"
+bundle_id = "com.example.familytree"
+launch_args = ["-UITestSkipAppCheck"]          # always
+reset_args = ["-UITestResetAuth"]              # only with `ccdevice ios launch --reset` (fresh signed-out state)
+build = "xcodebuild build -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,id={ios_udid}' -derivedDataPath {run_dir}/derived-ios -clonedSourcePackagesDirPath {cache_dir}/spm CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- APP_EMULATOR_AUTH_PORT={auth_port} APP_EMULATOR_FIRESTORE_PORT={firestore_port} APP_EMULATOR_STORAGE_PORT={storage_port} APP_EMULATOR_FUNCTIONS_PORT={functions_port} -quiet"
+app = "{run_dir}/derived-ios/Build/Products/Debug-iphonesimulator/App.app"
+
+[platforms.android]
+# One emulator: the debug app hardcodes the backend ports, so Android runs are serialized anyway.
+avd_names = ["codeandconfirm_api34"]
+ports = [5580]
+package = "com.example.familytree"
+activity = ".MainActivity"
+build = "cd android && ./gradlew :app:assembleDebug --no-daemon --console=plain"
+env = { JAVA_HOME = "{jdk17_home}", ANDROID_HOME = "{android_sdk}" }
+apk = "android/app/build/outputs/apk/debug/app-debug.apk"
+
+[suites.ios-ui-smoke]
+platform = "ios"
+command = "xcodebuild test -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -destination 'platform=iOS Simulator,id={ios_udid}' -derivedDataPath {run_dir}/derived-ios -clonedSourcePackagesDirPath {cache_dir}/spm CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- APP_EMULATOR_AUTH_PORT={auth_port} APP_EMULATOR_FIRESTORE_PORT={firestore_port} APP_EMULATOR_STORAGE_PORT={storage_port} APP_EMULATOR_FUNCTIONS_PORT={functions_port} -resultBundlePath {artifacts_dir}/ios-ui-smoke.xcresult -only-testing:AppUITests/AppUITests/testSignUpCreateTreeAddPerson -only-testing:AppUITests/AppUITests/testCreateTreeRapidRetryCreatesOneTree -only-testing:AppUITests/AppUITests/testSignInErrorClearsWhenSwitchingToSignUp -quiet"
+results = { kind = "xcresult", path = "{artifacts_dir}/ios-ui-smoke.xcresult" }
+
+[suites.android-ui-smoke]
+platform = "android"
+command = "cd android && ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.familytree.AppUiTest#signUpCreateTreeAddPerson,com.example.familytree.AppUiTest#deleteTreeReturnsToList,com.example.familytree.AppUiTest#signInErrorClearsWhenSwitchingToSignUp,com.example.familytree.AppUiTest#doubleTapCreateMakesOneTree --no-daemon --console=plain"
+env = { JAVA_HOME = "{jdk17_home}", ANDROID_HOME = "{android_sdk}", ANDROID_SERIAL = "{android_serial}" }
+results = { kind = "junit-dir", path = "android/app/build/outputs/androidTest-results/connected" }
+
+# Full native suites (weekly profile only): every XCUITest / every instrumented Android test.
+[suites.ios-ui-full]
+platform = "ios"
+command = "xcodebuild test -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -destination 'platform=iOS Simulator,id={ios_udid}' -derivedDataPath {run_dir}/derived-ios -clonedSourcePackagesDirPath {cache_dir}/spm CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- APP_EMULATOR_AUTH_PORT={auth_port} APP_EMULATOR_FIRESTORE_PORT={firestore_port} APP_EMULATOR_STORAGE_PORT={storage_port} APP_EMULATOR_FUNCTIONS_PORT={functions_port} -resultBundlePath {artifacts_dir}/ios-ui-full.xcresult -only-testing:AppUITests -quiet"
+results = { kind = "xcresult", path = "{artifacts_dir}/ios-ui-full.xcresult" }
+
+[suites.android-ui-full]
+platform = "android"
+command = "cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --console=plain"
+env = { JAVA_HOME = "{jdk17_home}", ANDROID_HOME = "{android_sdk}", ANDROID_SERIAL = "{android_serial}" }
+results = { kind = "junit-dir", path = "android/app/build/outputs/androidTest-results/connected" }
+
+# Device-free suites: the JVM unit tests and the standalone swiftc logic tests (offline-sync engine, in-flight guard).
+[suites.android-unit]
+platform = "android"
+command = "cd android && ./gradlew :app:testDebugUnitTest --no-daemon --console=plain"
+env = { JAVA_HOME = "{jdk17_home}", ANDROID_HOME = "{android_sdk}" }
+results = { kind = "junit-dir", path = "android/app/build/test-results/testDebugUnitTest" }
+
+[suites.ios-logic]
+platform = "backend"
+command = "swiftc -o {artifacts_dir}/offlinetests ios/App/App/Models/Person.swift ios/App/App/Models/Event.swift ios/App/App/Services/LocalCache.swift ios/Tests/OfflineSyncTests.swift && {artifacts_dir}/offlinetests && swiftc -o {artifacts_dir}/inflightguardtests ios/App/App/Services/InFlightGuard.swift ios/Tests/InFlightGuardTests.swift && {artifacts_dir}/inflightguardtests"
+results = { kind = "none" }
+
+[suites.mock-server-unit]
+platform = "backend"
+command = "cd mock-server && npm install --no-audit --no-fund && npm test -- --test-reporter=junit --test-reporter-destination={artifacts_dir}/mock-server-unit.xml"
+results = { kind = "junit", path = "{artifacts_dir}/mock-server-unit.xml" }
+
+[journeys]
+required = ["auth.signup", "tree.create-once", "person.add", "nav.tree-back", "app.restart-persistence"]
+
+[journeys.catalog]
+"auth.signup" = "Sign up with a fresh unique email (use cac-<run>-<platform>@example.test), confirm 'My trees' appears. Then sign out from the profile menu and sign back in."
+"tree.create-once" = "Create a tree and confirm exactly ONE row with that name appears (check the backend too). Then create a second tree and submit with a real rapid double-tap: `ccdevice <platform> tap Create --exact --times 2 --interval-ms 80`; confirm exactly one row and one backend record."
+"person.add" = "Open a tree, add a person with a name and a birth year (the date toggle is a switch: `ccdevice <platform> tap 'Add birth date'` taps its trailing edge automatically), confirm they appear; open their detail; edit the name; confirm the edit persists; remove a person if the UI allows and confirm the list updates."
+"nav.tree-back" = "Navigate trees list → tree → person detail → back → back; confirm each screen restores its state; switch tree views (tree/list/timeline) where present."
+"app.restart-persistence" = "Terminate and relaunch the app (ccdevice restart); confirm the session and the created tree/person persist."
+"ui.keyboard-dialogs" = "Check the keyboard never covers the primary action, dialogs dismiss with back/cancel, whitespace-only names are rejected."
+"states.empty-loading-error" = "Inspect the empty-tree state, a loading state, and an error state (e.g. wrong password) for readable, non-clipped feedback."
+
+[perf]
+enabled = false                 # `codeandconfirm bench` measures regardless; enable to measure in every review
+samples = 5
+journeys = ["startup"]
+budgets = { startup_ms_percent = 25 }
+# iOS: the app prints this line to stdout once the backend is configured; measured via `simctl launch --console-pty`.
+ios_ready_log_marker = "[App] Connected to Firebase emulators"
+
+[github]
+publish = false
+status_context = "codeandconfirm/qa"
+
+[trust]
+external_prs = "static-only"
+
+# ---------------------------------------------------------------------------------------------------
+# Profiles: partial configs merged over everything above. `pr` is the default (per change, fast,
+# medium effort, local emulator). `full` is the weekly run (every journey, every suite, benchmark,
+# high effort, the REAL development project with post-run account cleanup).
+
+[profiles.pr]
+description = "Per PR: sign-up + diff-derived journeys on the local emulator, medium effort, ~10 min"
+[profiles.pr.codex]
+reasoning_effort = "medium"
+[profiles.pr.qa]
+required_journeys = ["auth.signup"]
+require_diff_scenarios = true
+base_comparison = false
+worker_timeout_minutes = 15
+timeout_minutes = 40
+
+[profiles.full]
+description = "Weekly: all journeys, all suites, benchmark, high effort, real development project"
+[profiles.full.codex]
+reasoning_effort = "high"
+[profiles.full.qa]
+required_suites = ["ios-ui-smoke", "android-ui-smoke", "ios-ui-full", "android-ui-full", "android-unit", "ios-logic", "mock-server-unit"]
+required_journeys = ["auth.signup", "tree.create-once", "person.add", "nav.tree-back", "app.restart-persistence", "ui.keyboard-dialogs", "states.empty-loading-error"]
+worker_timeout_minutes = 90
+timeout_minutes = 300
+[profiles.full.perf]
+enabled = true
+ios_ready_log_marker = "[App] Using real Firebase project"
+# Real development project. Machine-local pieces (config_source, cleanup.credentials) live in
+# .codeandconfirm.local.toml or ~/.codeandconfirm/config.toml — never here. See docs/real-backend.md.
+[profiles.full.backend]
+kind = "firebase-real"
+env_script = "scripts/use-firebase-env.sh"
+env_name = "dev"
+restore_arg = "emulator"
+allowed_project_ids = ["my-app-dev"]                   # never my-app-test (humans only), never prod
+config_files = ["ios/App/App/GoogleService-Info.plist", "android/app/google-services.json"]
+prepare = ["cd firebase/functions && npm install --no-audit --no-fund"]
+[profiles.full.backend.cleanup]
+command = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix} APP_STORAGE_BUCKET={storage_bucket} APP_SWEEP_STRICT=1 node scripts/cleanup-test-accounts.js"
+verify = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix} APP_SWEEP_DRY_RUN=1 node scripts/cleanup-test-accounts.js"

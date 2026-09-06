@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  launchd example: weekly full CodeAndConfirm review, Sundays 03:00 local time.
+  Install:  cp examples/weekly/com.codeandconfirm.weekly-full.plist ~/Library/LaunchAgents/
+            edit the two paths below, then:  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.codeandconfirm.weekly-full.plist
+  Run now:  launchctl kickstart -k gui/$(id -u)/com.codeandconfirm.weekly-full
+  Remove:   launchctl bootout gui/$(id -u)/com.codeandconfirm.weekly-full
+  The machine must be awake (see `pmset repeat wakeorpoweron`); a LaunchAgent runs in the user's session,
+  which the simulator and emulator need.
+-->
+<dict>
+  <key>Label</key><string>com.codeandconfirm.weekly-full</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/PATH/TO/codeandconfirm/examples/weekly/weekly-full-review.sh</string>
+    <string>/PATH/TO/your-app-repo</string>
+    <string>main</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- codeandconfirm + codex + xcodebuild + node must be on this PATH -->
+    <key>PATH</key><string>/PATH/TO/codeandconfirm/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/codeandconfirm-weekly.log</string>
+  <key>StandardErrorPath</key><string>/tmp/codeandconfirm-weekly.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
