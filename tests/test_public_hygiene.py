@@ -16,6 +16,7 @@ PATTERNS = {
     "service account key": re.compile(r"\"private_key_id\""),
 }
 ALLOWED = {"tests/test_core.py", "tests/test_public_hygiene.py"}   # the tests that name the patterns themselves
+ALLOWED_MATCHES = {"tatendaz@me.com"}   # the maintainer's public contact address, published on purpose
 
 
 def test_tracked_files_carry_no_personal_data_or_secrets():
@@ -29,7 +30,9 @@ def test_tracked_files_carry_no_personal_data_or_secrets():
         except (UnicodeDecodeError, FileNotFoundError):
             continue
         for name, pat in PATTERNS.items():
-            m = pat.search(text)
-            if m:
+            for m in pat.finditer(text):
+                if m.group(0) in ALLOWED_MATCHES:
+                    continue
                 hits.append(f"{rel}: {name}: {m.group(0)[:40]}")
+                break
     assert not hits, "\n".join(hits)

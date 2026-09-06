@@ -10,3 +10,4 @@ build/
 /evidence/
 *.log
 .DS_Store
+docs/diagrams/*.visual-check.*

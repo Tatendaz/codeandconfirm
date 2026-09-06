@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CodeAndConfirm review pipeline",
+    "output": "docs/diagrams/review-pipeline.html",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "lead",
+      "label": "Lead agent (Claude)"
+    },
+    {
+      "id": "coordinator",
+      "label": "CodeAndConfirm coordinator"
+    },
+    {
+      "id": "workers",
+      "label": "QA workers (Codex) on real devices"
+    }
+  ],
+  "phases": [
+    {
+      "id": "candidate",
+      "label": "Candidate",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "isolate",
+      "label": "Isolate + build",
+      "fromCol": 1,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "judge",
+      "label": "Test + judge",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "commit",
+    "checkout",
+    "backend_build",
+    "native_suites",
+    "gate",
+    "outcome"
+  ],
+  "nodes": [
+    {
+      "id": "commit",
+      "lane": "lead",
+      "col": 0,
+      "type": "frontend",
+      "label": "Commit",
+      "sublabel": "candidate SHA"
+    },
+    {
+      "id": "outcome",
+      "lane": "lead",
+      "col": 4,
+      "type": "database",
+      "width": 176,
+      "label": "Verdict",
+      "sublabel": "PASS · FAIL · BLOCKED · CANCELLED",
+      "tag": "report.md"
+    },
+    {
+      "id": "checkout",
+      "lane": "coordinator",
+      "col": 1,
+      "type": "backend",
+      "width": 120,
+      "label": "Checkout",
+      "sublabel": "exact SHA, isolated"
+    },
+    {
+      "id": "backend_build",
+      "lane": "coordinator",
+      "col": 2,
+      "type": "cloud",
+      "width": 132,
+      "label": "Backend + build",
+      "sublabel": "emulator, build, install"
+    },
+    {
+      "id": "native_suites",
+      "lane": "coordinator",
+      "col": 3,
+      "type": "backend",
+      "width": 148,
+      "label": "Native suites",
+      "sublabel": "exit codes + parsed results"
+    },
+    {
+      "id": "gate",
+      "lane": "coordinator",
+      "col": 4,
+      "type": "security",
+      "width": 148,
+      "label": "Gate",
+      "sublabel": "evidence · model · journeys",
+      "tag": "blocking"
+    },
+    {
+      "id": "qa_workers",
+      "lane": "workers",
+      "col": 3,
+      "type": "external",
+      "width": 120,
+      "label": "Codex workers",
+      "sublabel": "review · iOS · Android",
+      "tag": "parallel"
+    },
+    {
+      "id": "ccdevice",
+      "lane": "workers",
+      "col": 4,
+      "type": "messagebus",
+      "width": 140,
+      "label": "ccdevice",
+      "sublabel": "taps, typing, screenshots",
+      "tag": "evidence/"
+    }
+  ],
+  "edges": [
+    {
+      "from": "commit",
+      "to": "checkout",
+      "label": "codeandconfirm review --pr N",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "checkout",
+      "to": "backend_build"
+    },
+    {
+      "from": "backend_build",
+      "to": "native_suites",
+      "label": "runs"
+    },
+    {
+      "from": "backend_build",
+      "to": "qa_workers",
+      "label": "task + role prompt",
+      "variant": "emphasis"
+    },
+    {
+      "from": "qa_workers",
+      "to": "ccdevice",
+      "label": "drives",
+      "role": "branch",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "native_suites",
+      "to": "gate",
+      "label": "results"
+    },
+    {
+      "from": "qa_workers",
+      "to": "gate",
+      "label": "findings + evidence",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gate",
+      "to": "outcome",
+      "label": "report + PR status",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "What counts as QA",
+      "items": [
+        "Suites are green by real exit codes and parsed result files",
+        "Workers must touch the app on a device; the build must match the SHA; each worker's model is verified"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Four verdicts",
+      "items": [
+        "PASS holds every check; FAIL is a blocking finding or a red suite",
+        "BLOCKED reports missing coverage instead of skipping it; CANCELLED publishes nothing"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Where the evidence lives",
+      "items": [
+        "Every run is durable under ~/.codeandconfirm/runs/<id>/ with report.md and evidence/",
+        "--publish posts the report and a codeandconfirm/qa status; approvals are per SHA and config fingerprint"
+      ]
+    }
+  ]
+}

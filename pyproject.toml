@@ -9,7 +9,7 @@ description = "One agent builds, the other tries to break it. Claude Code implem
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-authors = [{ name = "CodeAndConfirm contributors" }]
+authors = [{ name = "Tatenda Zhou", email = "tatendaz@me.com" }]
 keywords = ["qa", "code-review", "claude-code", "codex", "mobile-testing", "ios", "android"]
 classifiers = [
   "Development Status :: 3 - Alpha",

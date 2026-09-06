@@ -9,16 +9,14 @@ then validates the evidence on disk; the worker's opinion alone never yields a P
 
 This is a community project. It is not an official Anthropic or OpenAI product.
 
-```
-Claude commits a candidate ──▶ codeandconfirm review ──▶ isolated checkout of that exact SHA
-                                                        ├─ backend (local emulator) + builds + installs
-                                                        ├─ native suites (real exit codes, parsed results)
-                                                        ├─ Codex workers: review · iOS · Android (parallel)
-                                                        │    └─ ccdevice: accessibility-aware taps/typing,
-                                                        │       screenshots, logs → evidence/
-                                                        └─ gate: evidence, identity, model, journeys, findings
-                                                             ──▶ PASS / FAIL / BLOCKED / CANCELLED + report.md
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/review-pipeline-dark.svg">
+    <img src="docs/diagrams/review-pipeline-light.svg" width="100%" alt="The CodeAndConfirm review pipeline. The lead agent commits a candidate SHA and runs codeandconfirm review. The coordinator checks out that exact SHA in isolation, starts the backend, builds and installs, runs the native suites for real exit codes and parsed results, and hands the task to parallel Codex workers for review, iOS and Android, which drive the devices through ccdevice and produce screenshots, logs and evidence. The gate checks evidence, build identity, model and journeys and returns PASS, FAIL, BLOCKED or CANCELLED with report.md and a PR status.">
+  </picture>
+</p>
+
+<sub>Interactive version with pan, zoom and relationship tracing: <a href="docs/diagrams/review-pipeline.html">docs/diagrams/review-pipeline.html</a> (download and open). Source: <code>docs/diagrams/review-pipeline.workflow.json</code>.</sub>
 
 ## What you get
 
@@ -119,3 +117,5 @@ do not trust. Device QA requires an unsandboxed worker; fork PRs get read-only s
 ## License
 
 Apache-2.0 (see `LICENSE`). Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Maintained by Tatenda Zhou (<tatendaz@me.com>).
