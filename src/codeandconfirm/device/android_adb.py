@@ -5,6 +5,8 @@ Fully device-scoped (adb -s <serial>), no desktop involvement, works headless.
 
 from __future__ import annotations
 
+import subprocess
+
 import os
 import re
 import time
@@ -83,8 +85,12 @@ class AndroidEmulator(Device):
 
     def screenshot(self, path: Path) -> Path:
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
-        r = run([self.adb, "-s", self.serial, "exec-out", "screencap", "-p"], timeout=30)
-        raw = subprocess_bytes(self.adb, self.serial)
+        # One capture, generous deadline, one retry: under host load (CI jobs, a suite just killed) `screencap`
+        # can take well over 30 s once, and a proof must not fail the whole platform on that.
+        try:
+            raw = subprocess_bytes(self.adb, self.serial, timeout=90)
+        except subprocess.TimeoutExpired:
+            raw = subprocess_bytes(self.adb, self.serial, timeout=90)
         path.write_bytes(raw)
         if path.stat().st_size < 1000:
             raise DeviceError("screencap produced an empty image")
@@ -227,9 +233,8 @@ class AndroidEmulator(Device):
         self._shell("input", "keyevent", "KEYCODE_HOME", check=False)
 
 
-def subprocess_bytes(adb: str, serial: str) -> bytes:
-    import subprocess
-    return subprocess.run([adb, "-s", serial, "exec-out", "screencap", "-p"], capture_output=True, timeout=30).stdout
+def subprocess_bytes(adb: str, serial: str, timeout: float = 30) -> bytes:
+    return subprocess.run([adb, "-s", serial, "exec-out", "screencap", "-p"], capture_output=True, timeout=timeout).stdout
 
 
 def _split_component(app: str) -> tuple[str, str]:

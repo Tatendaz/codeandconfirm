@@ -245,6 +245,10 @@ class Coordinator:
 
     # ------------------------------------------------------------------ phases
     def _phase_reserving(self, cand: dict, opts: ReviewOptions) -> None:
+        # A (re-)reservation re-evaluates every platform: a block recorded by an earlier attempt (device
+        # unavailable, adapter proof failed) is not carried over, so `resume --rerun-phase reserving …` retries it.
+        for p in self._platforms(opts):
+            (self.ctx.get("platform_status") or {}).pop(p, None)
         sched = self.cfg.data["scheduler"]
         m = host_metrics(sched.get("ci_worker_process_pattern", ""))
         self.ctx["host_at_start"] = m.to_dict()
