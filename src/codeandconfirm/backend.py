@@ -147,6 +147,12 @@ def start_backend(cfg_backend: dict, *, checkout: Path, values: dict, run_id: st
         lf = open(log_file, "ab")
         lf.write(f"# {now_iso()} $ {start_cmd}\n".encode())
         full_env = dict(os.environ); full_env.update(env)
+        # A run-private temp dir: the Firebase Storage emulator keeps its blobs under $TMPDIR/firebase/storage,
+        # one path per machine, so another emulator instance shutting down (or a sweep deleting objects) can
+        # pull a running instance's blob store away and crash it. Each run gets its own.
+        tmp = Path(vals.get("run_dir", str(log_file.parent.parent))) / "tmp"
+        tmp.mkdir(parents=True, exist_ok=True)
+        full_env.setdefault("TMPDIR", str(tmp)); full_env["TMPDIR"] = str(tmp)
         proc = subprocess.Popen(["/bin/bash", "-lc", start_cmd], cwd=str(workdir), env=full_env, stdout=lf,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
         health = [render(h, vals) for h in cfg_backend.get("health", [])]
@@ -198,9 +204,31 @@ def stop_backend(handle: BackendHandle | dict | None, run_id: str) -> None:
     pid = h.get("pid")
     if pid and pid_alive(pid):
         kill_process_group(pid, grace_s=8)
+    kill_run_orphans(run_id)
     res = h.get("reservation")
     if res:
         Reservation(res, run_id, 1).release()
+
+
+def kill_run_orphans(run_id: str) -> list[int]:
+    """Kill processes that escaped the backend's process group but still belong to this run: their command
+    line names the run directory (e.g. a Firestore emulator JVM started with `--import runs/<id>/…/seed`,
+    which firebase-tools leaves behind when it dies). Only processes naming THIS run are touched."""
+    marker = f"runs/{run_id}/"
+    r = subprocess.run(["pgrep", "-f", marker], capture_output=True, text=True)
+    killed = []
+    for tok in r.stdout.split():
+        try:
+            pid = int(tok)
+        except ValueError:
+            continue
+        if pid == os.getpid():
+            continue
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
+        if marker in cmd and "codeandconfirm" not in cmd.split()[0:1][0] if cmd.split() else False:
+            kill_process_group(pid, grace_s=5)
+            killed.append(pid)
+    return killed
 
 
 def backend_alive(handle: dict | None) -> bool:

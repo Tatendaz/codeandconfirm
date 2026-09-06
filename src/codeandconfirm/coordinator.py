@@ -767,6 +767,9 @@ class Coordinator:
         if backend.get("kind") == "firebase-emulator":
             env_lines.append(f"- The coordinator rewrote `{self.cfg.get('backend.workdir', 'firebase')}/firebase.json` to pin the emulator ports for this run; "
                              f"that tracked-file change is expected and whitelisted — it is not a modification of the candidate and not a blocker.")
+            env_lines.append("- The prepared emulator is shared by every worker of this run. Never start another emulator instance "
+                             "(`firebase emulators:start|exec`), never stop, restart or import into this one, and do not run scripts that "
+                             "delete Storage objects through it: the Storage emulator crashes on that and takes Auth and Firestore down for everyone.")
         if backend.get("kind") == "firebase-real":
             bd = backend.get("detail") or {}
             env_lines.append(f"- Backend: **REAL Firebase project `{bd.get('project_id')}`** (environment `{bd.get('env_name', 'dev')}`; a shared cloud "
