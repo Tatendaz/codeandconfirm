@@ -45,7 +45,8 @@ Do not weaken `external_prs` to get device coverage on your workstation.
 A PASS approval record is a local JSON file under `$CODEANDCONFIRM_HOME/approvals/` bound to the exact
 candidate SHA, base SHA, configuration fingerprint and required plan. It is written by the same user
 that could edit it. It proves that *this machine* ran the plan and the gate accepted the evidence;
-it is not tamper-proof. Use the server-side status check (`examples/github/codeandconfirm-required.yml`
+it is not tamper-proof. Use the server-side status check (`examples/github/codeandconfirm-required.yml`, ideally with its
+`CODEANDCONFIRM_STATUS_CREATOR` variable pinned to the publishing identity,
 in this repo, copied into the target repository) as the merge backstop, and treat the commit status
 as "a run happened for this SHA from a machine with the developer's token".
 

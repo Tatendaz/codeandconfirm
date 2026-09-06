@@ -9,6 +9,9 @@ The durable enforcement point is branch protection on the server.
    Checks API (`checks: write`); GitHub shows the latest check run of that name, and the red pull-request check turns
    green (the `status` half is active once the workflow is on the default branch). If your ruleset can require a
    commit status directly, requiring `codeandconfirm/qa` itself is simpler still.
+2. Optional hardening: anyone with write access can post a commit status, so set the repository variable
+   `CODEANDCONFIRM_STATUS_CREATOR` to the login (or app) that publishes verdicts; the workflow then ignores a
+   `codeandconfirm/qa` success from any other identity. See [trust-boundaries.md](trust-boundaries.md).
 2. Run reviews for PRs with `codeandconfirm review --pr <n> --publish`. On completion the coordinator posts:
    - a PR comment containing the report (truncated to 60 kB; screenshots stay local), and
    - a **commit status** on the tested head SHA with context `codeandconfirm/qa` and state

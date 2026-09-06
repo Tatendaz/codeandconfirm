@@ -13,6 +13,8 @@
 # API; GitHub takes the latest check run of a name. `status` workflows run from the default branch, so this
 # half is active once the file is on main. Simplest alternative when the ruleset allows it: require the
 # commit status `codeandconfirm/qa` itself as the required check and skip this workflow.
+# Hardening: set the repository variable CODEANDCONFIRM_STATUS_CREATOR to the login that publishes verdicts;
+# a `codeandconfirm/qa` success from any other identity is then ignored (anyone with write access can post a status).
 name: CodeAndConfirm required
 on:
   pull_request:
@@ -39,6 +41,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           CONTEXT: codeandconfirm/qa
+          EXPECTED_CREATOR: ${{ vars.CODEANDCONFIRM_STATUS_CREATOR }}
         run: |
           if [ -z "$PR_NUMBER" ]; then
             PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number' 2>/dev/null || true)
@@ -46,7 +49,15 @@ jobs:
           fi
           state=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .state" | head -1)
           desc=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .description" | head -1)
-          echo "head=$SHA context=$CONTEXT state=${state:-none} description=${desc:-}"
+          creator=$(gh api "repos/$REPO/commits/$SHA/status" --jq ".statuses[] | select(.context==\"$CONTEXT\") | .creator.login" | head -1)
+          echo "head=$SHA context=$CONTEXT state=${state:-none} creator=${creator:-?} description=${desc:-}"
+          # Optional hardening: anyone with write access can post a status. Set the repository variable
+          # CODEANDCONFIRM_STATUS_CREATOR to the login of the account (or app) that publishes verdicts and only
+          # a status from that identity counts.
+          if [ -n "$EXPECTED_CREATOR" ] && [ "$state" = "success" ] && [ "$creator" != "$EXPECTED_CREATOR" ]; then
+            echo "::error::codeandconfirm/qa on $SHA was published by '$creator', not by '$EXPECTED_CREATOR'; ignoring it"
+            state="untrusted-publisher"
+          fi
           { echo "state=${state:-none}"; echo "desc=${desc:-no verdict published for this commit}"; echo "sha=$SHA"; echo "pr=$PR_NUMBER"; } >> "$GITHUB_OUTPUT"
           if [ "$state" != "success" ] && [ "$EVENT" = "pull_request" ]; then
             echo "::error::No passing CodeAndConfirm verdict for $SHA (state=${state:-none}). Run: codeandconfirm review --pr $PR_NUMBER --publish"
