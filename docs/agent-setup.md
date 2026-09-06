@@ -55,7 +55,9 @@ distribution sources and respect the project's required Xcode/JDK versions.
 Choose a persistent CodeAndConfirm clone location with the user. If a clone
 already exists, check its remote, revision, and dirty state before reusing it.
 Use the user's requested trusted revision, or the default branch when none was
-specified. Do not reset, overwrite, or upgrade an existing clone silently.
+specified. Before installation, require a clean checkout at that trusted revision.
+If it is dirty or points to an unapproved revision, stop and ask for explicit
+approval before installing from it. Do not reset, overwrite, or upgrade it silently.
 
 From the selected CodeAndConfirm clone:
 
