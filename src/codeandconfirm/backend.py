@@ -225,7 +225,7 @@ def kill_run_orphans(run_id: str) -> list[int]:
         if pid == os.getpid():
             continue
         cmd = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout
-        if marker in cmd and "codeandconfirm" not in cmd.split()[0:1][0] if cmd.split() else False:
+        if marker in cmd:          # anything of this run still alive when its backend stops is an orphan
             kill_process_group(pid, grace_s=5)
             killed.append(pid)
     return killed
