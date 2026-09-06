@@ -18,10 +18,19 @@ there should be one. The gate returned **FAIL**.
 |:---:|:---:|
 | <img src="docs/media/duplicate-tree/ios-candidate.png" width="240" alt="iOS candidate after restart, showing two IOS Single rows and two IOS Double rows."> | <img src="docs/media/duplicate-tree/android-candidate.png" width="240" alt="Android candidate showing two CAC Android Single rows and two CAC Android Double rows."> |
 
-Actual screenshots from a recorded QA run, not mockups. All names are synthetic.
-[See the base comparison, results, and source evidence](docs/demo.md).
+Actual screenshots from a recorded QA run with synthetic names. [Base comparison, results, and source evidence](docs/demo.md).
 
 ## Install and configure
+
+### Give this to your agent
+
+> Set up CodeAndConfirm for this app repository. Read and follow
+> https://github.com/Tatendaz/codeandconfirm/blob/main/docs/agent-setup.md.
+> Inspect the project, install missing tools with my approval, configure QA, and verify a first run.
+> Preserve existing settings. Ask me for logins or decisions you cannot infer. Do not merge or publish anything.
+
+The [agent setup guide](docs/agent-setup.md) covers discovery, device setup, configuration,
+Claude integration, and verification. Prefer manual setup? Start below.
 
 **Alpha, macOS first.** Tested on Apple silicon with iOS Simulator and Android Emulator.
 You need Python 3.11+, `uv`, Xcode and `idb`, Android SDK and your app's JDK, and a
@@ -75,14 +84,7 @@ Use `codeandconfirm report <run-id>` to read the result.
 
 ## Let Claude request QA
 
-From your CodeAndConfirm clone, link the skill once. Inspect any existing destination first.
-
-```bash
-mkdir -p ~/.claude/skills
-ln -s "$PWD/skills/codeandconfirm" ~/.claude/skills/codeandconfirm
-```
-
-Then tell Claude in your configured app repository:
+After [agent-led setup](docs/agent-setup.md) or [manual skill installation](docs/quickstart.md#6-from-claude-code), tell Claude:
 
 > Implement this change, then use /codeandconfirm before opening the PR.
 > Fix blocking findings and rerun QA. Stop after five repair cycles. Do not merge.

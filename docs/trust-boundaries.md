@@ -55,7 +55,7 @@ as "a run happened for this SHA from a machine with the developer's token".
 - Codex authentication stays in `$CODEX_HOME/auth.json`; CodeAndConfirm never copies it.
 - `gh` resolves PRs read-only by default. `--publish` or `[github].publish = true`
   enables report comments and commit statuses; `publish-issues` separately opts
-  into creating or updating issues.
+  into creating issues or reusing matching existing issues without updating their bodies.
 - The backend used for QA is a **local emulator** unless your config says otherwise.
   Never point the QA config at production. Optional [real-development-backend runs](real-backend.md)
   require separate credentials and cleanup configuration.

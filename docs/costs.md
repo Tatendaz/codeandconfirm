@@ -31,8 +31,9 @@ and screenshots it reads. Set `[codex].reasoning_effort = "medium"` for cheaper 
 
 `gh` resolves pull requests, and Git fetches their commits. `--publish` or
 `[github].publish = true` enables report comments and commit statuses using your
-`gh` login. The separate `publish-issues` command creates or updates issues on
-request. These GitHub actions are distinct from model-provider traffic and the
+`gh` login. The separate `publish-issues` command creates issues or reuses matching
+existing issues on request; it does not update their bodies. These GitHub actions
+are distinct from model-provider traffic and the
 network access used by builds, dependencies, and your configured backend.
 
 ## Local resources

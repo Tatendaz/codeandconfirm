@@ -24,6 +24,17 @@ Used pictures, one of the requested formats. No generated app screens, new mobil
 QA run, or video rendering. Kept performance measurements separate from functional
 test evidence. Left the main checkout and app code unchanged.
 
+## Follow-up
+
+> can include a section with instructions for agents so that someone can just point their agent to it and it sets everything up for them?
+
+Added an agent setup guide covering repository discovery, prerequisite installation,
+profile-aware app configuration, dedicated devices, skill integration, first-run
+verification, and permission boundaries. Added a copyable README prompt. Addressed
+review feedback about issue reuse and the sample exporter's manual privacy checks.
+The follow-up passed all 80 tests and 63 relative-link/anchor checks. README is
+120 lines after adding the setup prompt and linking the existing skill-install steps.
+
 ## Verification
 
 - All 80 tests passed. The first sandboxed run could not execute `ps` in two

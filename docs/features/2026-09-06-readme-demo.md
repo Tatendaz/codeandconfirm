@@ -18,6 +18,8 @@ a linked guide.
   non-blocking findings and retains coverage gaps.
 - Correct authentication and data-handling claims against the implementation.
 - Align the quickstart with the README installation path.
+- Add a copyable agent-setup prompt and a repo-aware installation/verification guide.
+- Document manual sample-report publication checks and clarify issue reuse behavior.
 
 No runtime or gate behavior changes. The demo media comes from an archived run,
 not new device testing for this documentation change.

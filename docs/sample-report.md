@@ -7,6 +7,11 @@ The selected results and findings are preserved. Local paths, account identifier
 device identifiers, session links, and unrelated PR-description history are omitted.
 It is not a verbatim export or a claim that the app has no bugs.
 
+Maintainers: `scripts/export-sample-report.py` does not enforce these omissions.
+Its output is an intermediate draft that overwrites this page. Follow the
+[manual publication checklist](../CONTRIBUTING.md#publishing-a-sample-report)
+before committing an export; never publish its output unchecked.
+
 ## Tested candidate
 
 | Field | Recorded value |
