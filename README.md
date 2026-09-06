@@ -80,6 +80,34 @@ codeandconfirm report <run-id>
 See [docs/quickstart.md](docs/quickstart.md) for a walkthrough with a two-app Firebase project, and
 [examples/firebase-two-app.toml](examples/firebase-two-app.toml) for a complete configuration.
 
+## For agents
+
+CodeAndConfirm ships with a skill, so the agent that writes the code asks for QA on its own. Install the CLI
+once per machine, then give the agent the skill.
+
+**Claude Code as the lead (default).**
+
+```bash
+git clone https://github.com/Tatendaz/codeandconfirm.git && cd codeandconfirm
+uv tool install .                                    # `codeandconfirm` and `ccdevice` on PATH; or: pipx install .
+mkdir -p ~/.claude/skills
+ln -s "$PWD/skills/codeandconfirm" ~/.claude/skills/codeandconfirm   # or copy it into <your-repo>/.claude/skills/
+```
+
+With the skill in place, Claude Code runs `codeandconfirm review` before `gh pr create` and before pushing new
+commits to an open PR, reads the verdict, fixes every blocking finding, re-runs, and stops after five repair
+cycles. Say "run QA" or `/codeandconfirm` to trigger it by hand. To make the gate mandatory on the machine,
+install `hooks/pre-pr-gate.sh` as a Claude Code `PreToolUse` hook on `Bash`: `gh pr create` and `git push` are
+then refused without a current PASS for HEAD.
+
+**Codex as the lead.** Set `[roles] lead = "codex"` and `qa = "claude"` in `codeandconfirm.toml`, and paste
+`skills/codeandconfirm/for-codex-lead.md` into the repository's `AGENTS.md` (or `~/.codex/AGENTS.md`). Same
+rules, Codex vocabulary.
+
+**What the agent's machine needs** is what a human needs: the Claude Code and Codex CLIs signed in, Xcode with
+`idb`, the Android SDK with JDK 17, and a `codeandconfirm.toml` in the target repository (`codeandconfirm init`).
+`codeandconfirm doctor` lists what is missing, in agent-readable form.
+
 ## Verdicts
 
 | Verdict | Meaning |

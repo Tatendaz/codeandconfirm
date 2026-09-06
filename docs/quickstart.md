@@ -80,8 +80,10 @@ checked out into the run's own worktree. Your working copy is never modified. Th
 
 ## 6. From Claude Code
 
-Install the skill: copy `skills/codeandconfirm` into `~/.claude/skills/`. Claude will request QA before
-opening a PR, read the verdict, fix blocking findings, and re-run — at most five repair cycles per branch.
+Install the skill: symlink or copy `skills/codeandconfirm` into `~/.claude/skills/` (machine-wide) or into the
+target repository's `.claude/skills/` (ships with the project). Claude will request QA before opening a PR, read
+the verdict, fix blocking findings, and re-run — at most five repair cycles per branch. When Codex is the lead
+(`[roles] lead = "codex"`), paste `skills/codeandconfirm/for-codex-lead.md` into `AGENTS.md` instead.
 Optionally install `hooks/pre-pr-gate.sh` as a `PreToolUse` hook so `gh pr create` / `git push` are blocked
 without a current PASS for HEAD.
 
