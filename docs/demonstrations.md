@@ -6,6 +6,9 @@ All runs were executed against the reference app: a private two-app Firebase pro
 Compose) whose configuration is `examples/firebase-two-app.toml` with the real names swapped for generic ones.
 Run ids, counts and outcomes are real.
 
+Start with the [screenshot demo](demo.md) for published iOS and Android captures,
+base comparisons, and source metadata from the intentionally broken candidate.
+
 | # | Requirement | Evidence | Status |
 |---|---|---|---|
 | 1 | Known-good candidate passes the required checks | run `20260906-003402-cf79b7` (a real PR with a test-only change): 3 suites green (iOS 2/2, Android 2/2, mock-server 34/34), build identity verified on both devices, review PASS, iOS worker 201 actions / 53 screenshots, Android 157 / 43, all 5 required journeys `passed` with evidence on both platforms, model verified `gpt-6-astra` (cli 0.153.4) → **PASS**, approval written under `approvals/<repo-key>/<sha>.json`. Two pre-existing UX defects were reported (iOS low: stale sign-in error after switching to sign-up; Android medium: second tap of a rapid double-tap on Create falls through the closing dialog onto a list row) — below `block_severity = high`, so reported, not blocking. See `docs/sample-report.md`. | done |
