@@ -12,11 +12,11 @@ The durable enforcement point is branch protection on the server.
 2. Optional hardening: anyone with write access can post a commit status, so set the repository variable
    `CODEANDCONFIRM_STATUS_CREATOR` to the login (or app) that publishes verdicts; the workflow then ignores a
    `codeandconfirm/qa` success from any other identity. See [trust-boundaries.md](trust-boundaries.md).
-2. Run reviews for PRs with `codeandconfirm review --pr <n> --publish`. On completion the coordinator posts:
+3. Run reviews for PRs with `codeandconfirm review --pr <n> --publish`. On completion the coordinator posts:
    - a PR comment containing the report (truncated to 60 kB; screenshots stay local), and
    - a **commit status** on the tested head SHA with context `codeandconfirm/qa` and state
      `success` (PASS) / `failure` (FAIL) / `error` (BLOCKED, CANCELLED).
-3. In branch protection / rulesets, require the check **"CodeAndConfirm verdict present for head"**. The
+4. In branch protection / rulesets, require the check **"CodeAndConfirm verdict present for head"**. The
    workflow looks up the status on `pull_request.head.sha` and fails when it is not `success`.
 
 Because a status is bound to a SHA, any new commit on the PR has no status until a new run publishes one —
