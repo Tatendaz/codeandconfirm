@@ -95,14 +95,14 @@ def test_credentials_must_be_a_service_account_of_the_allowed_project(tmp_path):
     assert "not set" in fr.check_credentials(None, "my-app-dev")[1]
 
 
-def _cleanup_cfg(tmp_path: Path, sweep_exit=0, matched_after=0, print_result=True) -> dict:
+def _cleanup_cfg(tmp_path: Path, sweep_exit=0, matched_after=0, print_result=True, verify_exit=0) -> dict:
     sa = tmp_path / "sa.json"
     sa.write_text(json.dumps({"type": "service_account", "project_id": "my-app-dev", "client_email": "bot@my-app-dev.iam.gserviceaccount.com"}))
     result = 'echo "SWEEP_RESULT {\\"users\\": 2, \\"trees\\": 3, \\"left\\": 0}"' if print_result else "true"
     return {"cleanup": {
         "credentials": str(sa),
         "command": f'test "$GOOGLE_APPLICATION_CREDENTIALS" = "{sa}" && echo prefix={{account_prefix}} project={{project_id}} && {result} && exit {sweep_exit}',
-        "verify": f'echo "SWEEP_RESULT {{\\"matched\\": {matched_after}}}"',
+        "verify": f'echo "SWEEP_RESULT {{\\"matched\\": {matched_after}}}" && exit {verify_exit}',
     }}
 
 
@@ -121,6 +121,7 @@ def test_cleanup_success_verified_and_marker_cleared(tmp_path, monkeypatch):
 @pytest.mark.parametrize("kw,needle", [
     (dict(sweep_exit=1), "exited 1"),
     (dict(matched_after=2), "2 account(s) with prefix cac-run-2- still exist"),
+    (dict(matched_after=1, verify_exit=1), "1 account(s) with prefix cac-run-2- still exist"),   # a strict dry run exits 1 on matches
     (dict(print_result=False), "no SWEEP_RESULT"),
 ])
 def test_cleanup_failure_is_flagged_loudly(tmp_path, monkeypatch, kw, needle):

@@ -41,7 +41,7 @@ prepare = ["cd firebase/functions && npm install --no-audit --no-fund"]
 
 [backend.cleanup]
 command = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix} APP_STORAGE_BUCKET={storage_bucket} APP_SWEEP_STRICT=1 npm run --silent cleanup:test-accounts"
-verify  = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix} APP_SWEEP_DRY_RUN=1 npm run --silent cleanup:test-accounts"
+verify  = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix} APP_SWEEP_DRY_RUN=1 APP_SWEEP_STRICT=1 npm run --silent cleanup:test-accounts"
 ```
 
 Machine-local (`.codeandconfirm.local.toml`, gitignored — these paths are personal and hold credentials):
@@ -101,7 +101,8 @@ The repo owns the deletion logic (it knows its own data model); CodeAndConfirm o
 
 - the `command` deletes exactly the accounts whose email starts with `{account_prefix}` and everything
   they own, and prints as its last line `SWEEP_RESULT {"users": N, "trees": M, "left": K}`;
-- the `verify` command deletes nothing and prints `SWEEP_RESULT {"matched": N}`;
+- the `verify` command deletes nothing and prints `SWEEP_RESULT {"matched": N}` (its exit code may signal
+  matches; the line is what counts);
 - both read `GOOGLE_APPLICATION_CREDENTIALS` (exported by CodeAndConfirm) and exit non-zero on error.
 
 A reference shape: a Node script on the Firebase Admin SDK that pages through Auth users, selects those whose

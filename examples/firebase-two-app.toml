@@ -162,4 +162,4 @@ config_files = ["ios/App/App/GoogleService-Info.plist", "android/app/google-serv
 prepare = ["cd firebase/functions && npm install --no-audit --no-fund"]
 [profiles.full.backend.cleanup]
 command = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix},uitest- APP_STORAGE_BUCKET={storage_bucket} APP_SWEEP_STRICT=1 node scripts/cleanup-test-accounts.js"
-verify = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix},uitest- APP_SWEEP_DRY_RUN=1 node scripts/cleanup-test-accounts.js"
+verify = "cd firebase/functions && APP_PROJECT_ID={project_id} APP_SWEEP_PREFIX={account_prefix},uitest- APP_SWEEP_DRY_RUN=1 APP_SWEEP_STRICT=1 node scripts/cleanup-test-accounts.js"

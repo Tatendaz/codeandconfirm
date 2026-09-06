@@ -256,13 +256,14 @@ def run_cleanup(cfg_backend: dict, *, checkout: Path, values: dict, run_id: str,
             vcmd = render(str(cl["verify"]), vals)
             v = run(vcmd, cwd=checkout, env=env, timeout=timeout_s, log_file=log_file, record_to=record_to, label="backend-cleanup-verify")
             vs = _parse_sweep_result(v.stdout)
-            if v.ok and vs is not None and "matched" in vs:
+            # The result line is authoritative; a strict dry run may exit non-zero precisely because accounts remain.
+            if vs is not None and vs.get("matched") is not None:
                 res["remaining"] = int(vs.get("matched") or 0)
                 res["verified"] = True
                 if res["remaining"] > 0 and not res["error"]:
                     res["error"] = f"{res['remaining']} account(s) with prefix {prefix} still exist after the sweep"
             elif not res["error"]:
-                res["error"] = f"verification exited {v.exit_code} without a SWEEP_RESULT line"
+                res["error"] = f"verification exited {v.exit_code} without a usable SWEEP_RESULT line" + (f" ({vs.get('error')})" if vs and vs.get("error") else "")
         except KeyError as e:
             res["error"] = res["error"] or f"verify command has an unknown placeholder: {e}"
     res["ok"] = res["error"] is None and (not cl.get("verify") or res["remaining"] == 0)
