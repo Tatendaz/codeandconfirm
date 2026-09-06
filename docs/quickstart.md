@@ -3,15 +3,20 @@
 ## 1. Install
 
 ```bash
-git clone <repo-url> codeandconfirm && cd codeandconfirm
-uv venv .venv && uv pip install -e '.[dev]'
-export PATH="$PWD/.venv/bin:$PATH"      # provides `codeandconfirm` and `ccdevice`
+git clone https://github.com/Tatendaz/codeandconfirm.git
+cd codeandconfirm
+uv tool install .
 codeandconfirm --version
 ```
 
 iOS tooling: Xcode + `brew tap facebook/fb && brew install idb-companion && uv tool install fb-idb --python 3.12`.
 Android tooling: Android SDK (`ANDROID_HOME`), one arm64 system image, JDK 17 (`brew install openjdk@17`).
 Codex: `codex login`, then `codex debug models | grep -o '"slug":"[^"]*"'` must list the model you configure.
+
+Keep this clone to link the Claude skill in step 6. Contributors who need an editable
+install should use the [development instructions](../CONTRIBUTING.md#development).
+If your shell cannot find the installed commands, run `uv tool update-shell` and open
+a new terminal.
 
 ## 2. Configure your app repository
 
@@ -50,13 +55,16 @@ handing a device to the QA worker; a failing proof makes that platform BLOCKED.
 
 ## 4. Review a branch
 
-```bash
-git checkout -b feat/thing && git commit -am "…"
-cat > /tmp/criteria.md <<'EOF'
+Start from a branch with your change committed. Create `criteria.md` in the app
+repository with acceptance criteria appropriate to your change. For this example:
+
+```markdown
 - Creating a tree from the empty state produces exactly one tree.
 - Sign-in errors are shown inline; no raw HTTP codes.
-EOF
-codeandconfirm review --branch feat/thing --base main --criteria-file /tmp/criteria.md
+```
+
+```bash
+codeandconfirm review --branch "$(git branch --show-current)" --base main --criteria-file criteria.md
 ```
 
 Watch progress in another terminal: `codeandconfirm status <run-id>`. When it ends:
@@ -86,6 +94,17 @@ the verdict, fix blocking findings, and re-run — at most five repair cycles pe
 (`[roles] lead = "codex"`), paste `skills/codeandconfirm/for-codex-lead.md` into `AGENTS.md` instead.
 Optionally install `hooks/pre-pr-gate.sh` as a `PreToolUse` hook so `gh pr create` / `git push` are blocked
 without a current PASS for HEAD.
+
+From the CodeAndConfirm clone, if the destination does not already exist:
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s "$PWD/skills/codeandconfirm" ~/.claude/skills/codeandconfirm
+```
+
+Then ask Claude to use `/codeandconfirm` in the configured app repository before
+opening the PR. The [README workflow](../README.md#let-claude-request-qa) includes
+a copyable prompt.
 
 ## 7. Resume, cancel, clean up
 

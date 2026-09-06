@@ -53,10 +53,17 @@ as "a run happened for this SHA from a machine with the developer's token".
 ## Credentials
 
 - Codex authentication stays in `$CODEX_HOME/auth.json`; CodeAndConfirm never copies it.
-- `gh` is used read-only unless `--publish` is passed (comment + commit status).
-- The backend used for QA is a **local emulator** unless your config says otherwise. Never point the
-  QA config at production. Real-backend configs (service accounts, plists) are out of scope for QA runs.
+- `gh` resolves PRs read-only by default. `--publish` or `[github].publish = true`
+  enables report comments and commit statuses; `publish-issues` separately opts
+  into creating or updating issues.
+- The backend used for QA is a **local emulator** unless your config says otherwise.
+  Never point the QA config at production. Optional [real-development-backend runs](real-backend.md)
+  require separate credentials and cleanup configuration.
 - Test accounts are synthetic (`cac-<run>-<platform>-<n>@example.test`).
+
+Worker-selected code, screenshots, and other context reach the model provider even
+when GitHub publication is disabled. Local artifact storage is not an offline or
+local-inference guarantee. See [data handling](costs.md#data-handling).
 
 ## Desktop computer use
 

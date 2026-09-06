@@ -1,0 +1,97 @@
+{
+  "description": "Selected metadata and counts from a recorded QA run. Not a complete report or a new run. Images are byte-for-byte copies of the source captures.",
+  "run_id": "20260906-005526-69f052",
+  "started_at": "2026-09-06T00:55:26+00:00",
+  "candidate_sha": "129ce07d8200d59ea939c0e1c6fde46825498930",
+  "base_sha": "e5eaa0667d39b45723c8fe2cd6cc3e91b11f452e",
+  "backend": "local Firebase emulator",
+  "gate_verdict": "FAIL",
+  "model": "gpt-6-astra",
+  "codex_cli": "0.153.4",
+  "source_root": "$CODEANDCONFIRM_HOME/runs/20260906-005526-69f052",
+  "images": [
+    {
+      "file": "ios-candidate.png",
+      "source": "evidence/ios/102-restart-trees.png",
+      "captured_at": "2026-09-06T01:05:54+00:00",
+      "sha256": "d384be744fd0566f64fd25cc020f7a1a741bee8203ca6649937f893dcd642f25"
+    },
+    {
+      "file": "android-candidate.png",
+      "source": "evidence/android/187-final-online-trees.png",
+      "captured_at": "2026-09-06T01:16:43+00:00",
+      "sha256": "162cf3b2962e6b95d6e3e5add3aa901c6385f483c5cd8b2f27d9364665764d01"
+    },
+    {
+      "file": "ios-base.png",
+      "source": "evidence/ios/129-base-double-created.png",
+      "captured_at": "2026-09-06T01:07:19+00:00",
+      "sha256": "18429ab54b68b98616883a5b45969346db55aee12578aafb1805cecdacc75cb0"
+    },
+    {
+      "file": "android-base.png",
+      "source": "evidence/android/150-base-settled-list.png",
+      "captured_at": "2026-09-06T01:13:11+00:00",
+      "sha256": "c9e2d96173385c6f7e4d6320ff5ca2a0b668d6d40e68442012038ba85a9eb4d0"
+    }
+  ],
+  "backend_counts": [
+    {
+      "platform": "ios",
+      "build": "candidate",
+      "source": "evidence/ios/backend-counts.txt",
+      "records": {
+        "IOS Single 0105": 2,
+        "IOS Double 0105": 2
+      }
+    },
+    {
+      "platform": "ios",
+      "build": "base",
+      "source": "evidence/ios/backend-base-counts.txt",
+      "records": {
+        "BASE Single 0107": 1,
+        "BASE Double 0107": 1
+      }
+    },
+    {
+      "platform": "android",
+      "build": "candidate",
+      "source": "evidence/android/backend-final-comparison.txt",
+      "records": {
+        "CAC Android Single": 2,
+        "CAC Android Double": 2
+      }
+    },
+    {
+      "platform": "android",
+      "build": "base",
+      "source": "evidence/android/backend-final-comparison.txt",
+      "records": {
+        "CAC Android Base Single": 1,
+        "CAC Android Base Double": 1
+      }
+    }
+  ],
+  "native_suites": [
+    {
+      "name": "ios-ui-smoke",
+      "passed": 0,
+      "total": 2,
+      "exit": 65
+    },
+    {
+      "name": "android-ui-smoke",
+      "passed": 1,
+      "total": 2,
+      "exit": 1
+    },
+    {
+      "name": "mock-server-unit",
+      "passed": 34,
+      "total": 34,
+      "exit": 0
+    }
+  ],
+  "omitted": "Raw transcripts, credentials, account and document IDs, host/device identifiers, and build artifacts."
+}

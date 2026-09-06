@@ -3,8 +3,11 @@
 ## Codex
 
 CodeAndConfirm launches `codex exec` with the binary and model you configure (`[codex].binary`, `[codex].model`).
-Authentication is whatever `codex login` set up in `$CODEX_HOME/auth.json`: a ChatGPT plan login or an
-`OPENAI_API_KEY`. CodeAndConfirm never reads, copies, or transmits that file; `doctor` only reports the auth mode.
+Authentication uses your existing Codex login or API-key setup. CodeAndConfirm's
+`doctor` reads `$CODEX_HOME/auth.json` to report login presence, auth mode, and the
+last refresh time. It does not copy that file into run artifacts. The Codex CLI
+uses its credentials to authenticate with the provider; keep credentials out of
+the app repository and test fixtures.
 
 - **Plan login (ChatGPT):** usage counts against your plan's Codex limits. Astra-class models can be
   restricted to certain plans; `codex debug models` shows what your login can use and `doctor` refuses to run
@@ -26,8 +29,11 @@ and screenshots it reads. Set `[codex].reasoning_effort = "medium"` for cheaper 
 
 ## GitHub
 
-`gh` is used read-only to resolve pull requests. `--publish` posts one comment and one commit status per run
-using your `gh` token. No other network use.
+`gh` resolves pull requests, and Git fetches their commits. `--publish` or
+`[github].publish = true` enables report comments and commit statuses using your
+`gh` login. The separate `publish-issues` command creates or updates issues on
+request. These GitHub actions are distinct from model-provider traffic and the
+network access used by builds, dependencies, and your configured backend.
 
 ## Local resources
 
@@ -38,8 +44,23 @@ using your `gh` token. No other network use.
   yours to set: `codeandconfirm gc --older-than-days N` (default 14 in docs; `[artifacts].retention_days`).
 - Simulators and emulators are reused across runs; app data is cleared per run.
 
-## What is never sent anywhere
+## Data handling
 
-Screenshots, logs and diffs stay on the machine unless you `--publish` (comment text only; screenshots are
-not uploaded). Reports and command logs pass through a redaction filter for common token formats before being
-written.
+Local storage does not mean local inference.
+
+| Destination | What to expect |
+|---|---|
+| Your Mac | Run worktrees, diffs, reports, screenshots, logs, and worker transcripts are stored locally. |
+| Model provider | Workers send their prompts and selected context for inference. This can include source code, diffs, command output, accessibility text, screenshots, and test data visible in the app. Codex uses its configured provider; Claude QA uses Claude's service. |
+| GitHub | Opt-in publication sends report text and commit status, or finding text through `publish-issues`. CodeAndConfirm does not upload screenshot files through these commands. Report text can still contain sensitive details. |
+| Build tools and backend | Dependency downloads, app requests, and configured commands use their own network connections. A local-emulator configuration does not make the whole run offline. |
+
+Reports and coordinator command summaries apply pattern-based redaction for common
+token formats. This is not a guarantee that all artifacts or model inputs are
+sanitized. Screenshots are not automatically redacted, and raw worker transcripts
+can contain sensitive content. Use synthetic accounts and non-production data;
+inspect reports and images before publishing or committing them.
+
+Provider retention and training policies depend on the service, account, and
+settings you use. CodeAndConfirm does not override those policies. See
+[trust boundaries](trust-boundaries.md) for the worker's local permissions.
