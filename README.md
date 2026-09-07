@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/media/codeandconfirm-mascots.png" width="460" alt="Claude coding while Codex inspects a bug."></p>
 
-<p align="center"><strong>One agent builds, the other tries to break it.</strong></p>
+<h2 align="center">One agent builds, the other tries to break it.</h2>
 
 Claude writes the code. Codex opens your iOS and Android apps, exercises user flows, and reports what breaks. Review a branch or an existing PR with screenshots, test results, and a verdict tied to the tested commit.
 
