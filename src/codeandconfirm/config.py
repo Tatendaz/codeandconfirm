@@ -42,6 +42,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "qa": {
         "platforms": ["ios", "android"],
+        "platforms_from_diff": False,     # narrow `platforms` to those whose product code the diff touches (gate.platform_touched)
         "parallel_platforms": True,
         "static_review": True,
         "required_suites": [],
@@ -216,6 +217,7 @@ reasoning_effort = "medium"
 [profiles.pr.qa]
 required_journeys = ["auth.signup"]
 require_diff_scenarios = true      # a platform the diff touches must report >= 1 diff.<slug> scenario
+platforms_from_diff = true         # test only the platform(s) whose product code the diff touches; shared backend code → all
 base_comparison = false            # skip the base build; attribution happens in the weekly full run
 worker_timeout_minutes = 15
 timeout_minutes = 40

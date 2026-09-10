@@ -321,6 +321,14 @@ def evaluate(cfg: Config, cand: dict, ctx: dict) -> GateResult:
         add("findings.pre-existing", True, "finding", f"{len(preexisting)} finding(s) at/above {block_sev} reproduced identically on the base build; reported, not blocking "
             f"(set qa.block_preexisting = true to block): " + "; ".join(f"[{f['severity']}] {f['title']}" for f in preexisting[:4]), required=False, outcome="info")
 
+    # --- platform selection (qa.platforms_from_diff) ----------------------------------------------
+    # A platform the diff does not touch was not tested at all; the checks table says so rather than the
+    # report implying two-platform coverage.
+    sel = ctx.get("platform_selection") or {}
+    if sel.get("skipped"):
+        add("platforms.not-tested", True, "infra", f"{', '.join(sel['skipped'])} not tested this run: {sel.get('reason') or 'not selected'}",
+            required=False, outcome="info")
+
     # --- real backend: account cleanup ------------------------------------------------------------
     # A failed sweep never changes the product verdict (it is our housekeeping, not the candidate's defect),
     # but it is a required-visibility flag: the report banner, `status` and a durable marker all shout it.

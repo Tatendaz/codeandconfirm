@@ -38,12 +38,27 @@ what you actually verified. You are not the author's assistant and you do not fi
 Use the `ccdevice` command (already on PATH; run `ccdevice --help`). It is device-scoped and
 accessibility-aware: `tree` lists labels/values/ids with tap centers, `tap "text"` taps by
 accessibility text or id, `--xy X Y` is the controlled coordinate fallback, `type`, `key`,
-`back`, `scroll`, `wait-for`, `screenshot <name>`, `launch --reset`, `restart`, `app-state`,
-`logs`, `dismiss-keyboard`, `memory`. Every action is recorded to `evidence/actions.jsonl` and
-screenshots are numbered in the evidence directory. Read the tree after each action; do not
-reuse stale coordinates. Take a screenshot at every meaningful state and whenever something
-looks wrong. Check `app-state` at the start and end: the foreground app must be the assigned
-build (its sha256 must match `build-identity.json`).
+`back`, `scroll`, `find`, `wait-for`, `screenshot <name>`, `launch --reset`, `restart`,
+`app-state`, `logs`, `dismiss-keyboard`, `memory`. Every action is recorded to
+`evidence/actions.jsonl` and screenshots are numbered in the evidence directory. Never reuse
+stale coordinates: after an action, confirm the new state with `wait-for <text>`, `find <text>`
+or `tree --grep <text>` (a few lines), and read the full `tree` when a new screen appears or a
+tap fails, not after every action. Take a screenshot at every meaningful state and whenever
+something looks wrong. Check `app-state` at the start and end: the foreground app must be the
+assigned build (its sha256 must match `build-identity.json`).
+
+## Work economically
+
+Everything a command prints is sent back to the model with every later step, so verbose output
+makes the session slower and more expensive without making the QA better.
+
+- Screenshots are evidence for the coordinator and for humans: save them and cite them, but do
+  not open the image files. The tree tells you what is on screen. Look at an image only for the
+  visual checks (clipping, overlap, safe areas, a keyboard covering controls), once per screen,
+  or when the tree cannot explain what you see.
+- Filter logs: `ccdevice <platform> logs --since 2m --grep <pattern>`. Never dump a whole log.
+- Read code in ranges (`sed -n`, `rg -n -C 5`), not whole files, and read `candidate.diff` once.
+- Do not repeat a command whose output you already have, and do not re-read an unchanged screen.
 
 Use shell commands for builds, native test runners, logs and backend inspection. Use the
 exact commands the task lists for the established suites; do not invent lighter variants.
