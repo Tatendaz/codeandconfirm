@@ -64,6 +64,17 @@ def test_platform_touched_ignores_tests_and_docs():
     assert platform_touched(["android/app/src/main/java/x/Trees.kt"], "android")
     assert not platform_touched(["ios/App/AppUITests/AppUITests.swift", "docs/features/x.md"], "ios")
     assert not platform_touched(["android/app/src/androidTest/java/x/UiTest.kt"], "android")
+    # unit-test targets and test files by name are tests too; names that merely contain "test" are product code
+    assert not platform_touched(["ios/AppTests/FooTests.swift", "ios/AppTests/Support/Fixtures.swift"], "ios")
+    assert not platform_touched(["android/lib/src/test/java/x/FooTest.kt", "android/app/src/main/java/x/FooTests.kt"], "android")
+    assert not platform_touched(["firebase/functions/lib/sweep.test.js", "firebase/functions/lib/rules.spec.ts"], "ios")
+    assert platform_touched(["ios/App/Latest/View.swift"], "ios") and platform_touched(["android/app/src/main/java/x/Latest.kt"], "android")
+    assert platform_touched(["firebase/functions/lib/contest.js"], "android")
+    # the *Tests boundary is CamelCase-aware: Contests/ and Contests.swift are product code, LoginTest.kt is a test
+    assert platform_touched(["ios/App/Contests/View.swift", "ios/App/Contests.swift"], "ios")
+    assert platform_touched(["android/app/src/main/java/x/Contest.kt"], "android")
+    assert not platform_touched(["android/app/src/main/java/x/LoginTest.kt", "ios/App/AppUITests/Flows/SignupTest.swift"], "android")
+    assert not platform_touched(["test/x.kt", "mock-server/spec/api.js", "mock-server/__tests__/api.js"], "android")
     assert platform_touched(["firebase/firestore.rules"], "ios") and platform_touched(["firebase/firestore.rules"], "android")
     assert platform_touched(["firebase/functions/index.js"], "android")
     # operations tooling, configs and CI next to product code ask for no device scenario

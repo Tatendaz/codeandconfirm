@@ -23,9 +23,29 @@ Observed on the first integration target (two-app Firebase project, `high` effor
 | android (hands-on, 5 journeys, 108 interactions) | ~19 min | 319 | 5.1 M (4.96 M cached) | 15.7 k |
 | ios (hands-on) | ~10–20 min | 26–300 | 1.3–5 M (mostly cached) | 6–16 k |
 
-Input tokens are dominated by re-sent context (cached); the marginal cost per step is the accessibility tree
-and screenshots it reads. Set `[codex].reasoning_effort = "medium"` for cheaper per-change runs, keep
-`high`/`xhigh` for release QA, and trim `required_journeys` for quick iterations.
+Input tokens are dominated by re-sent context: every step sends the whole session again. The provider counts
+cached input at a fraction of the fresh price (about a tenth on OpenAI's published rate card), so a long session
+with verbose command output still adds up, and so do three workers where one would do. One three-worker run at
+`high` effort on the reference project came to about 0.3 M fresh input, 10 M cached input and 35 k output tokens
+(the table above); ten such runs in two days are 100 M cached input tokens.
+
+## Reducing Codex usage
+
+The `pr` profile written by `codeandconfirm init` applies most of these already; check yours.
+
+| Lever | Where | Effect |
+|---|---|---|
+| `reasoning_effort = "low"` or `"medium"` | `[profiles.pr.codex]` | fewer reasoning tokens and, in practice, far fewer steps per worker: a `high` Android worker took 319 commands, `medium` workers 30–60 |
+| `platforms_from_diff = true` | `[profiles.pr.qa]` | an iOS-only change starts no Android worker and no Android build; shared backend code still tests both; the report names what was skipped |
+| `static_review = false` | `[profiles.pr.qa]` | drops the device-free review worker (about 15 % of a run) where another reviewer already reads every PR; keep it in the weekly profile |
+| `worker_timeout_minutes` | `[profiles.pr.qa]` or `--worker-timeout` | a worker fills the time it is given; 15 minutes covers one required journey plus the diff scenarios |
+| `required_journeys` | `[profiles.pr.qa]` | one required journey per change; the full catalogue belongs to the weekly run |
+| `--platforms ios` | command line | one-off narrowing for a single run |
+
+The role prompt also asks the worker to work economically: confirm each step with `wait-for`, `find` or
+`tree --grep` instead of re-reading the whole accessibility tree, save screenshots without opening them, filter
+logs, and read code in ranges. Those rules live in `src/codeandconfirm/prompts/qa_role.md`; the evidence rules
+(screenshots, cited files, real interactions) are unchanged.
 
 ## GitHub
 

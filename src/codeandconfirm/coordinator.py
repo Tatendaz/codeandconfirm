@@ -30,7 +30,7 @@ from .config import Config, home_dir, render
 from .device.android_adb import AndroidEmulator, boot_emulator, ensure_avd
 from .device.base import DeviceError
 from .device.ios_idb import IOSSimulator, ensure_simulator
-from .gate import approve, evaluate, qa_engine, qa_model_requested, repo_key
+from .gate import approve, evaluate, platform_touched, qa_engine, qa_model_requested, repo_key
 from .report import short_summary, toolchain_facts, write_report
 from .runstore import Run, new_run_id, list_runs
 from .scheduler import Reservation, acquire_functional_slot, release_all_for, wait_for_capacity, host_metrics
@@ -72,6 +72,7 @@ class Coordinator:
         self._reservations: list[Reservation] = []
         self._workers: dict[str, CodexWorker] = {}
         self._lock = threading.Lock()
+        self._selected_platforms: list[str] | None = None   # set by execute(); see _select_platforms
 
     # ------------------------------------------------------------------ starting
     def start_branch(self, branch: str, base: str | None, opts: ReviewOptions) -> Run:
@@ -142,6 +143,7 @@ class Coordinator:
         self._install_signal_handlers()
         cand = run_.candidate()
         opts = ReviewOptions(**read_json(run_.dir / "options.json", {}))
+        self._selected_platforms = self._select_platforms(cand, opts)
         self.ctx["platforms"] = self._platforms(opts)   # what THIS run selected; the gate judges only these
         max_cycles = int(self.cfg.get("qa.max_repair_cycles", 5))
         try:
@@ -237,8 +239,41 @@ class Coordinator:
         return v
 
     def _platforms(self, opts: ReviewOptions) -> list[str]:
+        if self._selected_platforms is not None:
+            return list(self._selected_platforms)
+        return self._configured_platforms(opts)
+
+    def _configured_platforms(self, opts: ReviewOptions) -> list[str]:
         want = opts.platforms or self.cfg.get("qa.platforms", [])
         return [p for p in want if p in self.cfg.data.get("platforms", {})]
+
+    def _select_platforms(self, cand: dict, opts: ReviewOptions) -> list[str]:
+        """Which platforms this run tests. `--platforms` wins. Otherwise `qa.platforms`, narrowed, when
+        `qa.platforms_from_diff` is on, to the platforms whose product code the diff touches (the same rule the
+        gate uses for diff scenarios: shared backend code counts for every platform; tests, docs, config and
+        operations tooling count for none). A diff that touches no platform keeps every configured platform:
+        the tool narrows coverage only when the change clearly belongs to one side. The choice and its reason
+        are recorded in ctx["platform_selection"]; the report and the gate table show what was not tested."""
+        configured = self._configured_platforms(opts)
+        if opts.platforms:
+            sel = {"mode": "cli", "selected": configured, "skipped": [], "reason": "--platforms given on the command line"}
+        elif not self.cfg.get("qa.platforms_from_diff", False):
+            sel = {"mode": "configured", "selected": configured, "skipped": [], "reason": "qa.platforms"}
+        else:
+            changed = cand.get("changed_files") or []
+            touched = [p for p in configured if platform_touched(changed, p)]
+            if touched:
+                skipped = [p for p in configured if p not in touched]
+                sel = {"mode": "diff", "selected": touched, "skipped": skipped,
+                       "reason": f"qa.platforms_from_diff: the diff changes product code for {', '.join(touched)}"
+                                 + (f"; {', '.join(skipped)} not tested (no product code changed there)" if skipped else "")}
+            else:
+                sel = {"mode": "diff-fallback", "selected": configured, "skipped": [],
+                       "reason": "qa.platforms_from_diff: the diff touches no platform's product code, so every configured platform is tested"}
+        self.ctx["platform_selection"] = sel
+        if sel["mode"] in ("diff", "diff-fallback"):
+            self.log(f"platforms: {', '.join(sel['selected']) or 'none'} ({sel['reason']})")
+        return list(sel["selected"])
 
     def _active_platforms(self, opts: ReviewOptions) -> list[str]:
         return [p for p in self._platforms(opts) if not (self.ctx["platform_status"].get(p) or {}).get("blocked")]
@@ -840,8 +875,10 @@ class Coordinator:
             title = f"hands-on functional, visual and accessibility QA on {platform}"
             body = (
                 f"1. Confirm the foreground app is the assigned build (`ccdevice {platform} app-state`).\n"
-                f"2. Drive every required journey through the real UI with `ccdevice {platform} …`, reading the tree after each action. "
-                f"Screenshot each meaningful state.\n"
+                f"2. Drive every required journey through the real UI with `ccdevice {platform} …`. Confirm each step changed the state: `wait-for`, "
+                f"`find` or `tree --grep` on a marker that was not on screen before, or an element value compared before and after; "
+                f"read the full `tree` when a new screen appears or a tap fails, not after every action. "
+                f"Screenshot each meaningful state: save and cite the files, do not open them (the tree tells you what is on screen).\n"
                 f"3. Derive scenarios from the diff (`candidate.diff`) and exercise the changed behaviour end to end; try the unexpected "
                 f"(double taps, rapid retries, empty/whitespace input, back mid-flow, keyboard covering controls, restart, offline if the app supports it).\n"
                 f"4. Inspect empty/loading/error states, clipped or overlapping text, safe areas, touch targets and accessibility labels; check `ccdevice {platform} logs` for crashes/exceptions after each journey.\n"
@@ -853,7 +890,8 @@ class Coordinator:
         else:
             title = "independent code review of the diff (correctness, security, data integrity, deployment, parity, performance)"
             body = (
-                "1. Read `candidate.diff` and the touched files in `checkout/`. Trace behaviour end to end (UI → view model → repository → backend rules/functions).\n"
+                "1. Read `candidate.diff` once, then the touched files in `checkout/` in ranges around the changed hunks (`sed -n`, `rg -n -C 5`), "
+                "not whole files. Trace behaviour end to end (UI → view model → repository → backend rules/functions).\n"
                 "2. Check: correctness and edge cases; security (auth, rules, injection, secrets, data exposure); data integrity (duplicates, idempotency, partial writes, "
                 "migrations); deployment dependencies (backend rules/functions/indexes/config that must ship together — name them explicitly); iOS/Android parity; "
                 "performance risks (N+1 reads, heavy work on the main thread, unbounded lists, large images).\n"

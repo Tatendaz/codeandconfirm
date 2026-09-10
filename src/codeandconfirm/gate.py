@@ -60,11 +60,25 @@ def repo_key(repo_root: str | Path) -> str:
     return hashlib.sha256(str(Path(repo_root).resolve()).encode()).hexdigest()[:16]
 
 
-_TEST_PATH_HINTS = ("uitests", "/test/", "/tests/", "androidtest", "__tests__", "/spec/")
+_TEST_DIR_NAMES = {"test", "tests", "spec", "specs", "androidtest", "__tests__", "uitests"}     # exact segment, any case
+_TEST_DIR_SUFFIXES = ("Tests", "UITests")                                                    # CamelCase boundary: AppTests, not Contests
+_TEST_FILE_SUFFIXES = ("Tests.swift", "Test.swift", "Tests.kt", "Test.kt", "Tests.java", "Test.java")  # LoginTest.kt, not Latest.kt
+_TEST_FILE_SUFFIXES_CI = (".test.js", ".test.ts", ".spec.js", ".spec.ts")
 # Operations tooling next to product code: sweep/seed scripts, per-environment configs, CI — not behaviour a
 # device worker can exercise, so a change there asks for no diff-derived scenario.
 _OPS_PATH_HINTS = ("/scripts/", "/config/", "/.github/", ".github/", "/seed/", "/seed-bulk/")
 _NON_CODE_SUFFIXES = (".md", ".txt", ".png", ".jpg", ".toml", ".yml", ".yaml", ".lock", ".json")
+
+
+def is_test_path(path: str) -> bool:
+    """Test code by convention: a directory named exactly test/tests/spec/androidTest/__tests__ (any case), a
+    directory whose CamelCase name ends in `Tests` (`ios/AppTests/`, `AppUITests/`; not `Contests/`), or a file named
+    `…Tests.swift|kt|java`, `…Test.swift|kt|java` (`LoginTest.kt`; not `Latest.kt`), `….test.js|ts`, `….spec.js|ts`."""
+    parts = path.split("/")
+    dirs, name = parts[:-1], parts[-1]
+    if any(seg.lower() in _TEST_DIR_NAMES or seg.endswith(_TEST_DIR_SUFFIXES) for seg in dirs):
+        return True
+    return name.endswith(_TEST_FILE_SUFFIXES) or name.lower().endswith(_TEST_FILE_SUFFIXES_CI)
 
 
 def platform_touched(changed_files: list[str], platform: str) -> bool:
@@ -72,7 +86,7 @@ def platform_touched(changed_files: list[str], platform: str) -> bool:
     tooling changes do not count; shared backend code (rules, functions, mock server) counts for every platform."""
     for f in changed_files or []:
         fl = f.lower()
-        if any(h in fl for h in _TEST_PATH_HINTS) or any(h in fl for h in _OPS_PATH_HINTS) or fl.endswith(_NON_CODE_SUFFIXES):
+        if is_test_path(f) or any(h in fl for h in _OPS_PATH_HINTS) or fl.endswith(_NON_CODE_SUFFIXES):
             continue
         if platform == "ios" and (fl.startswith("ios/") or fl.endswith(".swift")):
             return True
@@ -320,6 +334,14 @@ def evaluate(cfg: Config, cand: dict, ctx: dict) -> GateResult:
     if preexisting:
         add("findings.pre-existing", True, "finding", f"{len(preexisting)} finding(s) at/above {block_sev} reproduced identically on the base build; reported, not blocking "
             f"(set qa.block_preexisting = true to block): " + "; ".join(f"[{f['severity']}] {f['title']}" for f in preexisting[:4]), required=False, outcome="info")
+
+    # --- platform selection (qa.platforms_from_diff) ----------------------------------------------
+    # A platform the diff does not touch was not tested at all; the checks table says so rather than the
+    # report implying two-platform coverage.
+    sel = ctx.get("platform_selection") or {}
+    if sel.get("skipped"):
+        add("platforms.not-tested", True, "infra", f"{', '.join(sel['skipped'])} not tested this run: {sel.get('reason') or 'not selected'}",
+            required=False, outcome="info")
 
     # --- real backend: account cleanup ------------------------------------------------------------
     # A failed sweep never changes the product verdict (it is our housekeeping, not the candidate's defect),
