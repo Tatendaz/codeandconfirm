@@ -100,6 +100,6 @@ def test_gate_says_nothing_when_every_platform_ran(tmp_path):
 def test_role_prompt_tells_the_worker_to_read_less():
     role = (PROMPTS_DIR / "qa_role.md").read_text()
     assert "Read the tree after each action" not in role
-    assert "tree --grep <text>" in role and "do\n  not open the image files" in role and "Work economically" in role
+    assert "marker that was not on screen before" in role and "do\n  not open the image files" in role and "Work economically" in role
     # the evidence rules are untouched: screenshots are still required
     assert "Take a screenshot at every meaningful state" in role and "Evidence or it did not happen" in role

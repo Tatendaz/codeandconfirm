@@ -5,7 +5,8 @@
 
 A per-change run used to start three Codex workers (review, iOS, Android) whatever the diff
 touched, and the role prompt told each device worker to re-read the whole accessibility tree
-after every action. Ten `high`-effort runs consumed about 40 % of a weekly ChatGPT plan.
+after every action. One three-worker run at `high` effort came to about 0.3 M fresh input, 10 M
+cached input and 35 k output tokens.
 
 ## What changed
 

@@ -41,9 +41,11 @@ accessibility text or id, `--xy X Y` is the controlled coordinate fallback, `typ
 `back`, `scroll`, `find`, `wait-for`, `screenshot <name>`, `launch --reset`, `restart`,
 `app-state`, `logs`, `dismiss-keyboard`, `memory`. Every action is recorded to
 `evidence/actions.jsonl` and screenshots are numbered in the evidence directory. Never reuse
-stale coordinates: after an action, confirm the new state with `wait-for <text>`, `find <text>`
-or `tree --grep <text>` (a few lines), and read the full `tree` when a new screen appears or a
-tap fails, not after every action. Take a screenshot at every meaningful state and whenever
+stale coordinates: after an action, confirm that the state changed, with `wait-for`, `find` or
+`tree --grep` on a marker that was not on screen before (the next screen's title, the new row,
+the changed value), or by comparing an element's value before and after; text that was already
+there proves nothing. Read the full `tree` when a new screen appears or a tap fails, not after
+every action. Take a screenshot at every meaningful state and whenever
 something looks wrong. Check `app-state` at the start and end: the foreground app must be the
 assigned build (its sha256 must match `build-identity.json`).
 

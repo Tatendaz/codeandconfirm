@@ -25,8 +25,9 @@ Observed on the first integration target (two-app Firebase project, `high` effor
 
 Input tokens are dominated by re-sent context: every step sends the whole session again. The provider counts
 cached input at a fraction of the fresh price (about a tenth on OpenAI's published rate card), so a long session
-with verbose command output still adds up, and so do three workers where one would do. Ten `high`-effort runs
-on the reference project used roughly 40 % of a weekly ChatGPT plan allowance.
+with verbose command output still adds up, and so do three workers where one would do. One three-worker run at
+`high` effort on the reference project came to about 0.3 M fresh input, 10 M cached input and 35 k output tokens
+(the table above); ten such runs in two days are 100 M cached input tokens.
 
 ## Reducing Codex usage
 

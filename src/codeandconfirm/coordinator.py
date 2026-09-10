@@ -875,8 +875,9 @@ class Coordinator:
             title = f"hands-on functional, visual and accessibility QA on {platform}"
             body = (
                 f"1. Confirm the foreground app is the assigned build (`ccdevice {platform} app-state`).\n"
-                f"2. Drive every required journey through the real UI with `ccdevice {platform} …`. Confirm each step with `wait-for`, `find` or "
-                f"`tree --grep <text>`; read the full `tree` when a new screen appears or a tap fails, not after every action. "
+                f"2. Drive every required journey through the real UI with `ccdevice {platform} …`. Confirm each step changed the state: `wait-for`, "
+                f"`find` or `tree --grep` on a marker that was not on screen before, or an element value compared before and after; "
+                f"read the full `tree` when a new screen appears or a tap fails, not after every action. "
                 f"Screenshot each meaningful state: save and cite the files, do not open them (the tree tells you what is on screen).\n"
                 f"3. Derive scenarios from the diff (`candidate.diff`) and exercise the changed behaviour end to end; try the unexpected "
                 f"(double taps, rapid retries, empty/whitespace input, back mid-flow, keyboard covering controls, restart, offline if the app supports it).\n"
