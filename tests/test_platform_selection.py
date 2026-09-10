@@ -42,7 +42,8 @@ def test_shared_backend_code_selects_every_platform(tmp_path):
 
 def test_a_diff_touching_no_platform_keeps_every_configured_platform(tmp_path):
     co = _co(tmp_path)
-    assert co._select_platforms(_cand("docs/features/x.md", ".github/workflows/ci.yml", "ios/AppUITests/T.swift"), ReviewOptions()) == ["ios", "android"]
+    assert co._select_platforms(_cand("docs/features/x.md", ".github/workflows/ci.yml", "ios/AppUITests/T.swift", "ios/AppTests/FooTests.swift"),
+                                ReviewOptions()) == ["ios", "android"]
     assert co.ctx["platform_selection"]["mode"] == "diff-fallback"
     assert co.ctx["platform_selection"]["skipped"] == []
 
