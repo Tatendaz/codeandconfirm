@@ -134,6 +134,7 @@ reasoning_effort = "medium"
 [profiles.pr.qa]
 required_journeys = ["auth.signup"]
 require_diff_scenarios = true
+platforms_from_diff = true         # test only the platform(s) whose product code the diff touches; shared backend code → all
 base_comparison = false
 worker_timeout_minutes = 15
 timeout_minutes = 40

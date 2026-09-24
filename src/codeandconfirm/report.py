@@ -61,6 +61,9 @@ def render_markdown(run_state: dict, cand: dict, cfg_data: dict, ctx: dict, gate
     devs = ctx.get("devices") or {}
     if devs:
         L.append("- **Devices:** " + " · ".join(f"{p}: `{d.get('id')}` {d.get('name','')} {d.get('os','')}".strip() for p, d in devs.items()))
+    sel = ctx.get("platform_selection") or {}
+    if sel.get("mode") in ("diff", "diff-fallback"):
+        L.append(f"- **Platforms:** {', '.join(sel.get('selected') or []) or 'none'} · {sel.get('reason', '')}")
     if cand.get("acceptance_criteria"):
         L.append("")
         L.append("## Acceptance criteria")
@@ -121,7 +124,8 @@ def render_markdown(run_state: dict, cand: dict, cfg_data: dict, ctx: dict, gate
             L.append(f"### {name} — {v.get('verdict', 'no verdict')}")
             L.append("")
             L.append(f"exit={w.get('exit_code')} timed_out={w.get('timed_out')} commands={w.get('commands')} tool_calls={w.get('mcp_calls')} "
-                     f"tokens in/out={w.get('usage', {}).get('input_tokens')}/{w.get('usage', {}).get('output_tokens')} thread=`{w.get('thread_id')}`")
+                     f"tokens in/out={w.get('usage', {}).get('input_tokens')}/{w.get('usage', {}).get('output_tokens')} "
+                     f"(cached in {w.get('usage', {}).get('cached_input_tokens')}, reasoning out {w.get('usage', {}).get('reasoning_output_tokens')}) thread=`{w.get('thread_id')}`")
             if v.get("summary"):
                 L.append("")
                 L.append(redact(v["summary"]))

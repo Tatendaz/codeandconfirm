@@ -59,6 +59,7 @@ To make **Codex the lead**, point its instructions at `skills/codeandconfirm/for
 | key | default | meaning |
 |---|---|---|
 | `platforms` | `["ios","android"]` | platforms to build, install and QA |
+| `platforms_from_diff` | `false` | narrow `platforms` to those whose product code the diff touches (the `require_diff_scenarios` rule: shared backend code counts for every platform; tests, docs, config and ops tooling for none). A diff touching no platform keeps them all; `--platforms` overrides. Skipped platforms are named in the report header and the gate table (`platforms.not-tested`) |
 | `parallel_platforms` | `true` | run platform workers (and builds/suites) concurrently |
 | `static_review` | `true` | also run the device-free review worker |
 | `required_suites` | `[]` | suite names the coordinator must run green |
