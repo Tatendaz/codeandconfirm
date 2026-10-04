@@ -80,6 +80,17 @@ def paste_item(els: list[Element]) -> Element | None:
     return next((e for e in els if "MenuItem" in _traits(e) and e.label == "Paste"), None)
 
 
+def paste_tap_point(field: Element, els: list[Element]) -> tuple[int, int]:
+    """Trailing edge of the field, or just left of a clear button that sits inside the field's frame."""
+    cy = field.center[1]
+    x = field.x + field.w - min(8, field.w / 4)
+    for b in els:
+        if b.type == "Button" and "clear" in b.label.lower() and b.x >= field.x and b.x < field.x + field.w + 8 \
+                and b.y < field.y + field.h and b.y + b.h > field.y:
+            x = min(x, b.x - 6)
+    return int(max(field.x + 2, x)), cy
+
+
 def is_secure(e: Element) -> bool:
     return "SecureTextField" in _traits(e) or e.type == "SecureTextField"
 
@@ -92,7 +103,9 @@ def text_landed(field: Element, text: str, before: str = "") -> bool:
         prior = len(before) if before and set(before) <= {"•", "●", "*"} else 0
         return bullets - prior >= len(text)
     value = field.value or ""
-    return text in value and value != before
+    # The text must sit at the end of what was there (an empty field reports its placeholder as the value,
+    # which the paste replaces). Text inserted mid-value does not count.
+    return value == before + text or (value == text and value != before)
 
 
 def soft_key(els: list[Element], name: str) -> Element | None:
@@ -192,8 +205,8 @@ class IOSSimulator(Device):
         found; set CAC_IOS_TYPE=keys to force HID typing."""
         time.sleep(0.6)   # let the keyboard and caret settle after the focusing tap
         self.last_type_method, self.last_type_warning = None, None
-        why = "CAC_IOS_TYPE=keys"
-        if os.environ.get("CAC_IOS_TYPE", "paste").lower() != "keys":
+        why = "CAC_IOS_TYPE=keys" if self.soft_keyboard else "software_keyboard is off"
+        if self.soft_keyboard and os.environ.get("CAC_IOS_TYPE", "paste").lower() != "keys":
             status, why = self._paste(text)
             if status == "ok":
                 self.last_type_method = "paste"
@@ -205,6 +218,8 @@ class IOSSimulator(Device):
                 return
         self._idb_cmd("ui", "text", text)
         self.last_type_method = "hid-keys"
+        if not self.soft_keyboard:
+            return   # the run asked for HID typing: nothing to warn about
         self.last_type_warning = (f"typed with HID key events ({why}): iOS now minimizes the software keyboard, so "
                                   "keyboard-coverage checks are invalid until `ccdevice ios arm-keyboard`")
 
@@ -221,9 +236,10 @@ class IOSSimulator(Device):
         r = run(["xcrun", "simctl", "pbcopy", self.udid], input_text=text, timeout=30)
         if not r.ok:
             return "failed", f"simctl pbcopy failed: {r.stderr.strip()[:200]}"
-        # Tap near the trailing edge: the caret goes to the end of any existing text, and a tap on the caret of
-        # a focused field toggles the edit menu (Paste, AutoFill...). It can take two taps to open it.
-        tx, ty = int(field.x + field.w - min(8, field.w / 4)), field.center[1]
+        # Tap at the trailing edge so the caret goes to the end of any existing text, but left of a while-editing
+        # clear (x) button if there is one. A tap on the caret of a focused field toggles the edit menu (Paste,
+        # AutoFill...); it can take two taps to open it.
+        tx, ty = paste_tap_point(field, els)
         for _ in range(tries):
             self.tap_xy(tx, ty)
             time.sleep(0.9)
@@ -255,7 +271,7 @@ class IOSSimulator(Device):
                 self.tap_xy(*back.center); return
             w, h = self.screen_size()
             self.swipe(2, h // 2, int(w * 0.75), h // 2, 250); return
-        if n in SOFT_KEYS:
+        if n in SOFT_KEYS and self.soft_keyboard:
             try:
                 k = soft_key(self.tree(), n)
             except DeviceError:

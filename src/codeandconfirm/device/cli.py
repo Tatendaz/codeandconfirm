@@ -31,7 +31,7 @@ from pathlib import Path
 from ..util import eprint
 from .android_adb import AndroidEmulator, list_devices as android_list
 from .base import Device, DeviceError, Evidence
-from .ios_idb import COLLAPSED_TREE_HINT, IOSSimulator, keyboard_top, list_simulators
+from .ios_idb import COLLAPSED_TREE_HINT, KEYBOARD_ACCESSORY_PT, IOSSimulator, keyboard_top, list_simulators
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -291,7 +291,8 @@ def _dispatch(ns) -> int:
 def keyboard_cover(dev: Device, text: str, *, exact: bool = False, els: list | None = None,
                    android_top: float | None = None) -> tuple[int, str]:
     """Is the element `text` under the on-screen keyboard? Exit codes: 0 clear, 3 covered, 2 no keyboard shown,
-    4 element not in the tree (scrolled away, behind the keyboard, or a toolbar item idb never exposes)."""
+    4 element not in the tree (scrolled away, behind the keyboard, or a toolbar item idb never exposes),
+    5 (iOS) it reaches only into the band where a suggestion bar may or may not sit: decide from a screenshot."""
     if dev.platform == "ios":
         els = els if els is not None else dev.tree()
         top = keyboard_top(els)
@@ -315,6 +316,9 @@ def keyboard_cover(dev: Device, text: str, *, exact: bool = False, els: list | N
                    "or a toolbar item). Decide from a screenshot.")
     bottom = el.y + el.h
     where = f"keyboard top ~{top:.0f}{unit}; {el.type} {text!r} spans y {el.y:.0f}-{bottom:.0f}{unit}"
+    if dev.platform == "ios" and top < bottom <= top + KEYBOARD_ACCESSORY_PT:
+        # Number pads and secure fields often have no suggestion bar above the keys.
+        return 5, f"UNCERTAIN: {where}; it overlaps only the {KEYBOARD_ACCESSORY_PT}pt suggestion-bar band. Look at a screenshot."
     if bottom > top:
         return 3, f"COVERED: {where}"
     return 0, f"CLEAR: {where}"

@@ -866,7 +866,7 @@ class Coordinator:
                                      "it prints `typed (paste)`. If it prints a WARNING and `typed (hid-keys)`, iOS has minimized the keyboard: run `ccdevice ios arm-keyboard` "
                                      "(relaunches the app; the session survives, an unsaved form does not) before any keyboard check. Never call `idb ui text` or `idb ui key` yourself. "
                                      "`ccdevice ios key return` taps the keyboard's own return/Done key. "
-                                     "`ccdevice ios kbd '<label>'` says whether a control is under the keyboard: exit 0 CLEAR, 3 COVERED, 2 no keyboard, 4 not in the tree (decide from a screenshot). "
+                                     "`ccdevice ios kbd '<label>'` says whether a control is under the keyboard: exit 0 CLEAR, 3 COVERED, 5 UNCERTAIN (only the suggestion-bar band), 2 no keyboard, 4 not in the tree (decide from a screenshot on 4 and 5). "
                                      "Check every primary action of a form with the keyboard up.")
             env_lines.append(f"- Test accounts: use `{firebase_real.account_prefix(self.run.id)}{platform}-<n>@example.test` with password `CacTest-1234`. Never use real accounts.")
             bb = (self.ctx.get("base_builds") or {}).get(platform) or {}

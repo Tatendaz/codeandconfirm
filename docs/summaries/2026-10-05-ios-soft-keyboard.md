@@ -17,7 +17,7 @@ Reproduced both on the simulator. One `idb ui text` minimized the keyboard and s
 preferences; rewriting them and relaunching the app restored it. A screenshot of the "collapsed"
 state showed a Save Password sheet; tapping Not Now restored the tree, and turning AutoFill off
 stopped the sheet. Ported a paste-based typing path, keyboard detection, `kbd`, `arm-keyboard`
-and `disable-autofill` into the adapter and the coordinator. Seventeen new device-free tests use
+and `disable-autofill` into the adapter and the coordinator. Twenty new device-free tests use
 recorded idb shapes. Ran the adapter proof and paste/kbd checks on a real simulator.
 
 ## Decisions

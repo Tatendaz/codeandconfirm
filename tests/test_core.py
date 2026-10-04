@@ -282,7 +282,7 @@ def test_ios_type_pastes_and_keeps_keyboard(monkeypatch):
     assert calls["pbcopy"] == ["ada@example.test"]
     assert not any(a[:2] == ("ui", "text") for a in calls["idb"]), "no HID typing"
     assert calls["taps"][-1] == (80, 305)                       # the Paste item's center
-    assert calls["taps"][0][0] >= 117 + 195 - 8                  # field tapped at its trailing edge
+    assert calls["taps"][0][0] == int(117 + 195 - 8)             # trailing edge: the caret goes to the end
 
 
 def test_ios_type_falls_back_loudly_without_a_focused_field(monkeypatch):
@@ -426,10 +426,20 @@ def test_ios_type_never_retypes_after_paste_was_tapped(monkeypatch):
     assert not any(a[:2] == ("ui", "text") for a in calls["idb"])
 
 
-def test_ios_text_landed_needs_a_change_for_plain_fields():
+def test_ios_text_landed_needs_the_text_at_the_end():
     same = Element(0, "TextField", value="ada", extra={"traits": ["TextEntry"]})
     assert not ios_idb.text_landed(same, "ada", before="ada")          # a paste that did nothing
     assert ios_idb.text_landed(Element(0, "TextField", value="adaada", extra={"traits": []}), "ada", before="ada")
+    mid = Element(0, "TextField", value="a@examplezz.test", extra={"traits": []})
+    assert not ios_idb.text_landed(mid, "zz", before="a@example.test")  # inserted mid-value
+    assert ios_idb.text_landed(Element(0, "TextField", value="x@y.test", extra={"traits": []}), "x@y.test", before="Email")
+
+
+def test_paste_tap_point_avoids_the_clear_button():
+    field = Element(0, "TextField", value="abc", x=100, y=200, w=200, h=30)
+    assert ios_idb.paste_tap_point(field, []) == (292, 215)
+    clear = Element(1, "Button", label="Clear text", x=270, y=205, w=20, h=20)
+    assert ios_idb.paste_tap_point(field, [clear]) == (264, 215)
 
 
 def test_ios_soft_keyboard_flag_overrides_env(monkeypatch):
@@ -437,3 +447,24 @@ def test_ios_soft_keyboard_flag_overrides_env(monkeypatch):
     assert ios_idb.IOSSimulator("U", soft_keyboard=False).soft_keyboard is False
     monkeypatch.setenv("CAC_IOS_SOFT_KEYBOARD", "0")
     assert ios_idb.IOSSimulator("U").soft_keyboard is False and ios_idb.IOSSimulator("U", soft_keyboard=True).soft_keyboard
+
+
+def test_ios_software_keyboard_off_restores_hid_typing_and_keys(monkeypatch):
+    monkeypatch.delenv("CAC_IOS_TYPE", raising=False)
+    monkeypatch.setenv("CAC_IOS_SOFT_KEYBOARD", "0")
+    dev, calls = _fake_sim(monkeypatch, [SIGNUP_KEYBOARD_UP])
+    dev.type_text("hello")
+    assert dev.last_type_method == "hid-keys" and dev.last_type_warning is None and calls["pbcopy"] == []
+    dev.key("return")
+    assert calls["idb"] == [("ui", "text", "hello"), ("ui", "key", "40")] and calls["taps"] == []
+
+
+def test_keyboard_cover_band_is_uncertain_on_ios():
+    class Dev:
+        platform = "ios"
+
+        def find(self, needle, exact=False, tree=None):
+            return next((e for e in tree if e.matches(needle, exact=exact)), None)
+    els = ios_idb.parse_describe_all(SIGNUP_KEYBOARD_UP + [_ax("Button", "Next", None, ["Button"], 100, 600, 80, 30)])
+    rc, msg = keyboard_cover(Dev(), "Next", els=els)            # 600-630: below 592 (bar top), above 640 (keys)
+    assert rc == 5 and msg.startswith("UNCERTAIN")

@@ -29,7 +29,7 @@ outright.
   demand and relaunches the app.
 - `keyboard_shown()` works on iOS: the keyboard's keys are in the tree with the `KeyboardKey` trait.
 - `ccdevice <platform> kbd "<label>"`: is a control under the keyboard? Exit 0 clear, 3 covered,
-  2 no keyboard, 4 not in the tree. Android reads the IME frame from `dumpsys window InputMethod`.
+  5 only in the suggestion-bar band (iOS), 2 no keyboard, 4 not in the tree. Android reads the IME frame from `dumpsys window InputMethod`.
 - `ccdevice ios disable-autofill` and the coordinator turn off Settings > General > AutoFill &
   Passwords > AutoFill Passwords and Passkeys once per simulator (stored on disk, verified from the
   ManagedConfiguration user settings). Opt out with `[platforms.ios] disable_password_autofill = false`.

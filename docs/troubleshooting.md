@@ -47,7 +47,7 @@ why; `report <run-id>` lists every gate check with its detail.
   `typed (paste)`), `ccdevice ios key return` taps the keyboard's own key, and every `ccdevice ios launch` writes
   both preferences back to false. After a `typed (hid-keys)` warning run `ccdevice ios arm-keyboard` (rewrites the
   preferences and relaunches the app; no reboot needed). `ccdevice <platform> kbd "<label>"` reports whether a
-  control is under the keyboard (exit 0 clear, 3 covered, 2 no keyboard, 4 not in the tree).
+  control is under the keyboard (exit 0 clear, 3 covered, 5 only in the suggestion-bar band, 2 no keyboard, 4 not in the tree).
   `[platforms.ios] software_keyboard = false` restores HID typing.
 - iOS `tree` returns only the `Application` node although the screenshot shows UI and no sheet is visible → the
   simulator's accessibility bridge is wedged. Trigger observed on the reference host: **(re)installing an app** while the bridge is in use
