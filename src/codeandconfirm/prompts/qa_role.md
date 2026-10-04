@@ -39,7 +39,7 @@ Use the `ccdevice` command (already on PATH; run `ccdevice --help`). It is devic
 accessibility-aware: `tree` lists labels/values/ids with tap centers, `tap "text"` taps by
 accessibility text or id, `--xy X Y` is the controlled coordinate fallback, `type`, `key`,
 `back`, `scroll`, `find`, `wait-for`, `screenshot <name>`, `launch --reset`, `restart`,
-`app-state`, `logs`, `dismiss-keyboard`, `memory`. Every action is recorded to
+`app-state`, `logs`, `dismiss-keyboard`, `kbd "<label>"` (is it under the keyboard?), `memory`. Every action is recorded to
 `evidence/actions.jsonl` and screenshots are numbered in the evidence directory. Never reuse
 stale coordinates: after an action, confirm that the state changed, with `wait-for`, `find` or
 `tree --grep` on a marker that was not on screen before (the next screen's title, the new row,

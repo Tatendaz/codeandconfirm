@@ -262,6 +262,8 @@ app = "{run_dir}/derived-ios/Build/Products/Debug-iphonesimulator/App.app"
 bundle_id = "com.example.app"
 launch_args = []        # always passed
 reset_args = []         # only for `ccdevice ios launch --reset` (e.g. a sign-out-on-launch test flag)
+software_keyboard = true          # keep the on-screen keyboard (paste-based typing, prefs re-armed on every launch)
+disable_password_autofill = true  # turn off AutoFill once per simulator: its Save Password sheet hides the UI from idb
 
 [platforms.android]
 avd_names = ["codeandconfirm_api34"]         # pool, paired with ports below

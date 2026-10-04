@@ -26,10 +26,10 @@ tracked-file changes; the coordinator whitelists the files it rewrites itself, s
 |---|---|---|
 | `tree()` → `Element[]` | `idb ui describe-all` (points) | `uiautomator dump` (pixels) |
 | `screenshot(path)` | `simctl io screenshot` (idb fallback) | `screencap -p` |
-| `tap_xy`, `type_text`, `key`, `swipe` | `idb ui tap/text/key/swipe` | `input tap/text/keyevent/swipe` |
+| `tap_xy`, `type_text`, `key`, `swipe` | `idb ui tap/swipe`; text via `simctl pbcopy` + the Paste menu, keys via the on-screen key (HID `idb ui text/key` only as a fallback: it minimizes the software keyboard) | `input tap/text/keyevent/swipe` |
 | `launch/terminate/install/uninstall/clear_data` | `simctl` | `am start -W`, `am force-stop`, `adb install`, `pm clear` |
 | `app_state()` → foreground + installed identity | container Info.plist + executable sha256 | `pm path` + `sha256sum`, `dumpsys activity` |
-| `logs()`, `keyboard_shown()`, `dismiss_keyboard()`, `memory_kb()` | `log show`, tap neutral label, `ps rss` | `logcat --pid`, `dumpsys input_method`, `dumpsys meminfo` |
+| `logs()`, `keyboard_shown()`, `dismiss_keyboard()`, `memory_kb()` | `log show`, `KeyboardKey` traits in the tree, tap neutral label, `ps rss` | `logcat --pid`, `dumpsys input_method`, `dumpsys meminfo` |
 
 iOS specifics learned on the reference host (iOS 26 simulator, idb 1.5): `describe-all` omits navigation-bar and
 toolbar buttons for SwiftUI apps, so `IOSSimulator.bar_elements()` hit-tests points along the bar rows with

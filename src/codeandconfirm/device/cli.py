@@ -2,7 +2,9 @@
 
     ccdevice ios tree                       # accessibility tree (labels, values, ids, centers)
     ccdevice ios tap "Create account"       # tap by accessibility text/id (coordinate fallback: --xy X Y)
-    ccdevice ios type "hello"               # type into the focused field
+    ccdevice ios type "hello"               # type into the focused field (iOS: via Paste, keeps the soft keyboard)
+    ccdevice ios kbd "Save"                 # is "Save" covered by the on-screen keyboard? exit 0 clear, 3 covered
+    ccdevice ios arm-keyboard               # re-arm the software keyboard after HID typing (relaunches the app)
     ccdevice android wait-for "My trees" --timeout 20
     ccdevice android screenshot after-signup
     ccdevice ios launch --reset             # (re)launch the configured app with its launch args
@@ -29,7 +31,7 @@ from pathlib import Path
 from ..util import eprint
 from .android_adb import AndroidEmulator, list_devices as android_list
 from .base import Device, DeviceError, Evidence
-from .ios_idb import IOSSimulator, list_simulators
+from .ios_idb import COLLAPSED_TREE_HINT, IOSSimulator, keyboard_top, list_simulators
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -79,7 +81,7 @@ def launch_args_for(platform: str, reset: bool = False) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ccdevice", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("platform", choices=["ios", "android", "devices", "env"], help="platform, or 'devices'/'env' to list")
-    p.add_argument("command", nargs="?", help="tree|find|tap|type|key|back|home|scroll|screenshot|wait-for|launch|terminate|restart|install|uninstall|clear-data|app-state|logs|dismiss-keyboard|memory|proof|ax-health|recover-accessibility|describe-point|scale|bar")
+    p.add_argument("command", nargs="?", help="tree|find|tap|type|key|back|home|scroll|screenshot|wait-for|launch|terminate|restart|install|uninstall|clear-data|app-state|logs|dismiss-keyboard|kbd|arm-keyboard|disable-autofill|memory|proof|ax-health|recover-accessibility|describe-point|scale|bar")
     p.add_argument("args", nargs="*")
     p.add_argument("--device", help="UDID (ios) or serial (android); default from env")
     p.add_argument("--app", help="bundle id (ios) or package[/activity] (android); default from env")
@@ -142,10 +144,13 @@ def _dispatch(ns) -> int:
     a = ns.args
 
     if cmd == "tree":
+        els = dev.tree()
         if ns.json:
-            print(json.dumps([e.to_dict() for e in dev.tree()], default=str))
+            print(json.dumps([e.to_dict() for e in els], default=str))
         else:
-            print(dev.compact_tree(type_=ns.type_, grep=ns.grep, all_=ns.all_))
+            print(dev.compact_tree(type_=ns.type_, grep=ns.grep, all_=ns.all_, tree=els))
+        if ns.platform == "ios" and len(els) <= 1:
+            eprint(f"ccdevice: {COLLAPSED_TREE_HINT}")
         return 0
     if cmd == "find":
         el = dev.find(_need(a, "text"), exact=ns.exact, type_=ns.type_, index=ns.index, field_=ns.field_)
@@ -159,7 +164,26 @@ def _dispatch(ns) -> int:
              f"tapped{' x' + str(ns.times) if ns.times > 1 else ''} {el.short() if el else ns.xy}")
         return 0
     if cmd == "type":
-        dev.type(" ".join(a), snap=ns.snap); print("typed"); return 0
+        dev.type(" ".join(a), snap=ns.snap)
+        warning = getattr(dev, "last_type_warning", None)
+        if warning:
+            eprint(f"ccdevice: WARNING {warning}")
+        method = getattr(dev, "last_type_method", None)
+        print(f"typed ({method})" if method else "typed"); return 0
+    if cmd == "kbd":
+        rc, msg = keyboard_cover(dev, _need(a, "text"), exact=ns.exact)
+        print(msg); return rc
+    if cmd == "arm-keyboard":
+        if ns.platform != "ios":
+            eprint("arm-keyboard is iOS-only"); return 2
+        app = app_for("ios", ns.app) if (ns.app or _env("CAC_IOS_BUNDLE")) else None
+        r = dev.arm_software_keyboard(app, launch_args_for("ios"))
+        _out(ns, r, ("armed: " if r["ok"] else "NOT armed: ") + "; ".join(r["steps"])); return 0 if r["ok"] else 1
+    if cmd == "disable-autofill":
+        if ns.platform != "ios":
+            eprint("disable-autofill is iOS-only"); return 2
+        r = dev.disable_password_autofill()
+        _out(ns, r, ("ok: " if r["ok"] else "FAILED: ") + r["detail"]); return 0 if r["ok"] else 1
     if cmd == "key":
         dev.press_key(_need(a, "key")); print("ok"); return 0
     if cmd == "back":
@@ -264,6 +288,38 @@ def _dispatch(ns) -> int:
     eprint(f"ccdevice: unknown command {cmd!r}"); return 2
 
 
+def keyboard_cover(dev: Device, text: str, *, exact: bool = False, els: list | None = None,
+                   android_top: float | None = None) -> tuple[int, str]:
+    """Is the element `text` under the on-screen keyboard? Exit codes: 0 clear, 3 covered, 2 no keyboard shown,
+    4 element not in the tree (scrolled away, behind the keyboard, or a toolbar item idb never exposes)."""
+    if dev.platform == "ios":
+        els = els if els is not None else dev.tree()
+        top = keyboard_top(els)
+        if top is None:
+            return 2, ("no software keyboard on screen. If a field is focused, iOS minimized the keyboard after HID "
+                       "typing: run `ccdevice ios arm-keyboard`")
+        els = [e for e in els if "KeyboardKey" not in ((e.extra or {}).get("traits") or [])]
+        unit = "pt"
+    else:
+        if android_top is None:
+            if not dev.keyboard_shown():
+                return 2, "no IME on screen"
+            android_top = dev.keyboard_top()
+            if android_top is None:
+                return 2, "IME shown but its frame could not be read"
+        top, unit = android_top, "px"
+        els = els if els is not None else dev.tree()
+    el = dev.find(text, exact=exact, tree=els)
+    if el is None:
+        return 4, (f"UNKNOWN: {text!r} is not in the accessibility tree (scrolled away, hidden behind the keyboard, "
+                   "or a toolbar item). Decide from a screenshot.")
+    bottom = el.y + el.h
+    where = f"keyboard top ~{top:.0f}{unit}; {el.type} {text!r} spans y {el.y:.0f}-{bottom:.0f}{unit}"
+    if bottom > top:
+        return 3, f"COVERED: {where}"
+    return 0, f"CLEAR: {where}"
+
+
 def read_proof(dev: Device) -> dict:
     if dev.evidence and (dev.evidence.dir / "proof.json").exists():
         try:
@@ -338,6 +394,11 @@ def proof(dev: Device, ns) -> int:
         def navigate():
             before = {e.haystack() for e in dev.tree()}
             els = dev.tree()
+            # Never a key or accessory of an on-screen keyboard (Dictate opens a system alert): drop everything
+            # from the keyboard's top edge down.
+            kb_top = keyboard_top(els) if dev.platform == "ios" else None
+            els = [e for e in els if "KeyboardKey" not in ((e.extra or {}).get("traits") or [])
+                   and (kb_top is None or e.center[1] < kb_top)]
             # Prefer a labeled, enabled button that is not the primary submit button.
             cands = [e for e in els if e.type in ("Button", "TextView", "View") and e.enabled and e.label
                      and e.label.lower() not in ("create account", "sign in", "submit", "continue")

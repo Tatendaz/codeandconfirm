@@ -241,7 +241,9 @@ class Device(ABC):
     def type(self, text: str, *, snap: bool = False) -> None:
         self.type_text(text)
         time.sleep(self.settle_s)
-        self._rec("type", text=text, chars=len(text))
+        extra = {k: v for k, v in (("method", getattr(self, "last_type_method", None)),
+                                   ("warning", getattr(self, "last_type_warning", None))) if v}
+        self._rec("type", text=text, chars=len(text), **extra)
         if snap:
             self.snap("after-type")
 
@@ -268,9 +270,10 @@ class Device(ABC):
         self.key("home")
         self._rec("home")
 
-    def compact_tree(self, *, type_: str | None = None, grep: str | None = None, all_: bool = False) -> str:
+    def compact_tree(self, *, type_: str | None = None, grep: str | None = None, all_: bool = False,
+                     tree: list[Element] | None = None) -> str:
         lines = []
-        for e in self.tree():
+        for e in (tree if tree is not None else self.tree()):
             if type_ and e.type.lower() != type_.lower():
                 continue
             if grep and grep.lower() not in e.haystack().lower():
