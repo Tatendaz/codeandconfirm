@@ -325,10 +325,10 @@ def test_ios_launch_rearms_keyboard_unless_disabled(monkeypatch):
     dev.launch("com.example.app")
     writes = [a for a in calls["simctl"] if a[:3] == ("spawn", "UDID-TEST", "defaults")]
     assert {a[5] for a in writes} == set(ios_idb.KEYBOARD_PREF_KEYS) and all(a[-1] == "false" for a in writes)
-    calls["simctl"].clear()
     monkeypatch.setenv("CAC_IOS_SOFT_KEYBOARD", "0")
-    dev.launch("com.example.app")
-    assert not any(a[0] == "spawn" for a in calls["simctl"])
+    off, calls_off = _fake_sim(monkeypatch, [SIGNUP_KEYBOARD_UP])
+    off.launch("com.example.app")
+    assert not any(a[0] == "spawn" for a in calls_off["simctl"])
 
 
 def test_autofill_setting_read_from_plist(tmp_path):
@@ -413,3 +413,27 @@ def test_prepare_simulator_arms_keyboard_and_notes_autofill_failure():
     Coordinator._prepare_simulator(SimpleNamespace(ctx={}, log=lambda m: None), off,
                                    {"software_keyboard": False, "disable_password_autofill": False})
     assert off.calls == []
+
+
+def test_ios_type_never_retypes_after_paste_was_tapped(monkeypatch):
+    monkeypatch.delenv("CAC_IOS_TYPE", raising=False)
+    menu = SIGNUP_KEYBOARD_UP + [_ax("StaticText", "Paste", None, ["MenuItem"], 45, 283, 70, 44)]
+    reformatted = [dict(e) for e in SIGNUP_KEYBOARD_UP]
+    reformatted[1] = dict(reformatted[1], AXValue="(555) 010-0000")      # field reformatted the pasted value
+    dev, calls = _fake_sim(monkeypatch, [SIGNUP_KEYBOARD_UP, menu, reformatted])
+    dev.type_text("5550100000")
+    assert dev.last_type_method == "paste-unverified" and "not retyped" in dev.last_type_warning
+    assert not any(a[:2] == ("ui", "text") for a in calls["idb"])
+
+
+def test_ios_text_landed_needs_a_change_for_plain_fields():
+    same = Element(0, "TextField", value="ada", extra={"traits": ["TextEntry"]})
+    assert not ios_idb.text_landed(same, "ada", before="ada")          # a paste that did nothing
+    assert ios_idb.text_landed(Element(0, "TextField", value="adaada", extra={"traits": []}), "ada", before="ada")
+
+
+def test_ios_soft_keyboard_flag_overrides_env(monkeypatch):
+    monkeypatch.setenv("CAC_IOS_SOFT_KEYBOARD", "1")
+    assert ios_idb.IOSSimulator("U", soft_keyboard=False).soft_keyboard is False
+    monkeypatch.setenv("CAC_IOS_SOFT_KEYBOARD", "0")
+    assert ios_idb.IOSSimulator("U").soft_keyboard is False and ios_idb.IOSSimulator("U", soft_keyboard=True).soft_keyboard

@@ -91,7 +91,8 @@ def text_landed(field: Element, text: str, before: str = "") -> bool:
         bullets = len(v) if v and set(v) <= {"•", "●", "*"} else 0
         prior = len(before) if before and set(before) <= {"•", "●", "*"} else 0
         return bullets - prior >= len(text)
-    return text in (field.value or "")
+    value = field.value or ""
+    return text in value and value != before
 
 
 def soft_key(els: list[Element], name: str) -> Element | None:
@@ -118,10 +119,13 @@ def autofill_enabled_from_plist(path: Path) -> bool | None:
 class IOSSimulator(Device):
     platform = "ios"
 
-    def __init__(self, udid: str, evidence: Evidence | None = None, timeout: float = 60):
+    def __init__(self, udid: str, evidence: Evidence | None = None, timeout: float = 60,
+                 soft_keyboard: bool | None = None):
         super().__init__(udid, evidence)
         self.udid = udid
         self.timeout = timeout
+        # None = decide from CAC_IOS_SOFT_KEYBOARD (how the coordinator tells ccdevice in a worker shell).
+        self.soft_keyboard = (os.environ.get("CAC_IOS_SOFT_KEYBOARD", "1") != "0") if soft_keyboard is None else soft_keyboard
         self._idb = which("idb")
         self.last_type_method: str | None = None
         self.last_type_warning: str | None = None
@@ -190,26 +194,33 @@ class IOSSimulator(Device):
         self.last_type_method, self.last_type_warning = None, None
         why = "CAC_IOS_TYPE=keys"
         if os.environ.get("CAC_IOS_TYPE", "paste").lower() != "keys":
-            ok, why = self._paste(text)
-            if ok:
+            status, why = self._paste(text)
+            if status == "ok":
                 self.last_type_method = "paste"
+                return
+            if status == "unverified":
+                # Paste was tapped: typing again could enter the text twice. Report it and let the caller look.
+                self.last_type_method = "paste-unverified"
+                self.last_type_warning = f"{why}; not retyped (it may have landed reformatted): check the field"
                 return
         self._idb_cmd("ui", "text", text)
         self.last_type_method = "hid-keys"
         self.last_type_warning = (f"typed with HID key events ({why}): iOS now minimizes the software keyboard, so "
                                   "keyboard-coverage checks are invalid until `ccdevice ios arm-keyboard`")
 
-    def _paste(self, text: str, tries: int = 4) -> tuple[bool, str]:
+    def _paste(self, text: str, tries: int = 4) -> tuple[str, str]:
+        """("ok" | "unverified" | "failed", reason). "failed" means nothing was entered, so HID typing is safe;
+        "unverified" means Paste was tapped but the field does not show the text as expected."""
         if not text:
-            return True, "empty text"
+            return "ok", "empty text"
         els = self.tree()
         field = focused_field(els)
         if field is None:
-            return False, "no focused text field (IsEditing) in the tree"
+            return "failed", "no focused text field (IsEditing) in the tree"
         before = field.value or ""
         r = run(["xcrun", "simctl", "pbcopy", self.udid], input_text=text, timeout=30)
         if not r.ok:
-            return False, f"simctl pbcopy failed: {r.stderr.strip()[:200]}"
+            return "failed", f"simctl pbcopy failed: {r.stderr.strip()[:200]}"
         # Tap near the trailing edge: the caret goes to the end of any existing text, and a tap on the caret of
         # a focused field toggles the edit menu (Paste, AutoFill...). It can take two taps to open it.
         tx, ty = int(field.x + field.w - min(8, field.w / 4)), field.center[1]
@@ -223,9 +234,9 @@ class IOSSimulator(Device):
             time.sleep(0.8)
             now = focused_field(self.tree())
             if now is not None and text_landed(now, text, before):
-                return True, "pasted"
-            return False, "Paste was tapped but the text is not in the field"
-        return False, f"no Paste item appeared after {tries} taps on the field"
+                return "ok", "pasted"
+            return "unverified", "Paste was tapped but the field does not show the text"
+        return "failed", f"no Paste item appeared after {tries} taps on the field"
 
     def key(self, name: str) -> None:
         n = name.lower()
@@ -263,7 +274,7 @@ class IOSSimulator(Device):
         self._idb_cmd("ui", "swipe", str(x1), str(y1), str(x2), str(y2), "--duration", str(duration_ms / 1000))
 
     def launch(self, app: str, args: list[str] | None = None) -> dict:
-        if os.environ.get("CAC_IOS_SOFT_KEYBOARD", "1") != "0":
+        if self.soft_keyboard:
             self.write_keyboard_prefs()   # every launch starts with the software keyboard armed
         t0 = time.monotonic()
         r = self._simctl("launch", "--terminate-running-process", self.udid, app, *(args or []), timeout=60)

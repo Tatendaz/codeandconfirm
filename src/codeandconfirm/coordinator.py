@@ -323,7 +323,7 @@ class Coordinator:
                 res = Reservation(f"ios-device:{ident}", self.run.id, ttl, "dedicated QA device")
                 if not res.try_acquire():
                     cur = res.current(); errors.append(f"{name} reserved by run {cur.owner_run if cur else '?'}"); continue
-                dev = IOSSimulator(ident)
+                dev = IOSSimulator(ident, soft_keyboard=bool(pcfg.get("software_keyboard", True)))
                 ok, why = dev.available()
                 if not ok:
                     res.release(); errors.append(f"{name}: not booted ({why})"); continue
@@ -567,7 +567,7 @@ class Coordinator:
                 self.ctx.setdefault("installs", {})[p] = rec
                 self.log(f"{p}: re-installed candidate after suites; identity match={rec['identity_match']}")
                 if p == "ios":
-                    dev = IOSSimulator(dev_id)
+                    dev = IOSSimulator(dev_id, soft_keyboard=bool(pcfg.get("software_keyboard", True)))
                     if pcfg.get("software_keyboard", True):
                         # The adapter proof and XCUITest typing are HID key events: re-arm before the relaunch.
                         dev.write_keyboard_prefs()
@@ -657,7 +657,7 @@ class Coordinator:
             pcfg = self.cfg.data["platforms"][p]
             dev_id = self.ctx["devices"][p]["id"]
             try:
-                dev = IOSSimulator(dev_id) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
+                dev = IOSSimulator(dev_id, soft_keyboard=bool(pcfg.get("software_keyboard", True))) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
                 app = pcfg["bundle_id"] if p == "ios" else pcfg["package"]
                 st = dev.app_state(app)
                 installed = (st.get("identity") or {}).get("sha256")

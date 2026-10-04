@@ -22,7 +22,7 @@ outright.
   taps the trailing edge of the focused field (the element with the `IsEditing` trait) until the
   edit menu shows Paste, taps it, and checks the text landed (secure fields: bullet count). It
   prints `typed (paste)`. If no focused field or Paste item appears it falls back to HID typing
-  and prints a WARNING plus `typed (hid-keys)`. `CAC_IOS_TYPE=keys` forces HID typing.
+  and prints a WARNING plus `typed (hid-keys)`. Once Paste has been tapped it never retypes: if the field does not show the text (reformatted, trimmed, length limit) it prints `typed (paste-unverified)` and a warning. `CAC_IOS_TYPE=keys` forces HID typing.
 - `ccdevice ios key return|delete|space` taps the keyboard's own key when the keyboard is up.
 - Every `IOSSimulator.launch()` writes both keyboard preferences back to false, which re-arms the
   software keyboard for that launch (no reboot needed). `ccdevice ios arm-keyboard` does it on
