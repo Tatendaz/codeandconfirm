@@ -19,15 +19,129 @@ from .base import Device, DeviceError, Element, Evidence
 
 HID_KEYS = {"return": 40, "enter": 40, "delete": 42, "backspace": 42, "tab": 43, "space": 44, "escape": 41}
 
+# Software-keyboard keys a named key maps to. Tapping these keeps the on-screen keyboard; a HID key event does not.
+SOFT_KEYS = {"return": ("return", "done", "go", "next", "search", "send", "join", "route", "continue"),
+             "enter": ("return", "done", "go", "next", "search", "send", "join", "route", "continue"),
+             "delete": ("delete",), "backspace": ("delete",), "space": ("space",)}
+
+# Any HID keyboard event (`idb ui text`, `idb ui key`) makes iOS record a hardware keyboard and minimize the
+# software keyboard for every app launched afterwards, so keyboard-covers-the-button bugs become invisible.
+# Writing these two preferences back to false re-arms the software keyboard for the NEXT app launch.
+KEYBOARD_PREFS_DOMAIN = "com.apple.keyboard.preferences"
+KEYBOARD_PREF_KEYS = ("AutomaticMinimizationEnabled", "HardwareKeyboardLastSeen")
+# Height of the suggestion / AutoFill bar that sits above the key rows (points).
+KEYBOARD_ACCESSORY_PT = 48
+# Where iOS keeps the "AutoFill Passwords and Passkeys" setting (ManagedConfiguration user settings).
+AUTOFILL_SETTINGS_PLIST = ("Containers/Shared/SystemGroup/systemgroup.com.apple.configurationprofiles/"
+                           "Library/ConfigurationProfiles/UserSettings.plist")
+COLLAPSED_TREE_HINT = ("the accessibility tree shows only the Application node. Usually a system sheet that runs "
+                       "outside the app is on screen (Save Password?, Sign in with Apple, a share sheet): its "
+                       "contents are invisible to idb. Take a screenshot; tap its button with --xy (points = "
+                       "pixels / `ccdevice ios scale`), or run `ccdevice ios recover-accessibility`, which closes it.")
+
+
+def parse_describe_all(raw: list[dict]) -> list[Element]:
+    """`idb ui describe-all` JSON → Elements (frames in points)."""
+    els = []
+    for i, e in enumerate(raw):
+        f = e.get("frame") or {}
+        els.append(Element(
+            index=i, type=e.get("type") or (e.get("role") or "").replace("AX", ""),
+            label=(e.get("AXLabel") or "").strip(), value=(e.get("AXValue") or "") if isinstance(e.get("AXValue"), str) else str(e.get("AXValue") or ""),
+            identifier=e.get("AXUniqueId") or "", enabled=bool(e.get("enabled", True)),
+            x=float(f.get("x", 0)), y=float(f.get("y", 0)), w=float(f.get("width", 0)), h=float(f.get("height", 0)),
+            extra={"pid": e.get("pid"), "traits": e.get("traits"), "custom_actions": e.get("custom_actions")},
+        ))
+    return els
+
+
+def _traits(e: Element) -> list:
+    return list((e.extra or {}).get("traits") or [])
+
+
+def keyboard_keys(els: list[Element]) -> list[Element]:
+    """Software-keyboard keys in a tree. They are only present while the keyboard is shown in full."""
+    return [e for e in els if "KeyboardKey" in _traits(e)]
+
+
+def keyboard_top(els: list[Element]) -> float | None:
+    """Top edge (points) of the software keyboard including its suggestion bar, or None when it is not shown."""
+    keys = keyboard_keys(els)
+    return (min(e.y for e in keys) - KEYBOARD_ACCESSORY_PT) if keys else None
+
+
+def focused_field(els: list[Element]) -> Element | None:
+    """The text field that has the caret (iOS marks it with the IsEditing trait)."""
+    return next((e for e in els if "IsEditing" in _traits(e)), None)
+
+
+def paste_item(els: list[Element]) -> Element | None:
+    """The Paste entry of the text edit menu."""
+    return next((e for e in els if "MenuItem" in _traits(e) and e.label == "Paste"), None)
+
+
+def paste_tap_point(field: Element, els: list[Element]) -> tuple[int, int]:
+    """Trailing edge of the field, or just left of a clear button that sits inside the field's frame."""
+    cy = field.center[1]
+    x = field.x + field.w - min(8, field.w / 4)
+    for b in els:
+        if b.type == "Button" and "clear" in b.label.lower() and b.x >= field.x and b.x < field.x + field.w + 8 \
+                and b.y < field.y + field.h and b.y + b.h > field.y:
+            x = min(x, b.x - 6)
+    return int(max(field.x + 2, x)), cy
+
+
+def is_secure(e: Element) -> bool:
+    return "SecureTextField" in _traits(e) or e.type == "SecureTextField"
+
+
+def text_landed(field: Element, text: str, before: str = "") -> bool:
+    """Did `text` reach the field? A secure field shows one bullet per character, so count the bullets."""
+    if is_secure(field):
+        v = field.value or ""
+        bullets = len(v) if v and set(v) <= {"•", "●", "*"} else 0
+        prior = len(before) if before and set(before) <= {"•", "●", "*"} else 0
+        return bullets - prior >= len(text)
+    value = field.value or ""
+    # The text must sit at the end of what was there (an empty field reports its placeholder as the value,
+    # which the paste replaces). Text inserted mid-value does not count.
+    return value == before + text or (value == text and value != before)
+
+
+def soft_key(els: list[Element], name: str) -> Element | None:
+    labels = SOFT_KEYS.get(name.lower(), ())
+    for want in labels:
+        for e in keyboard_keys(els):
+            if e.label.strip().lower() == want:
+                return e
+    return None
+
+
+def autofill_enabled_from_plist(path: Path) -> bool | None:
+    """True/False from the ManagedConfiguration user settings; None when the file is unreadable.
+    A missing key means the factory default, which is enabled."""
+    try:
+        with open(path, "rb") as fh:
+            data = plistlib.load(fh)
+    except (OSError, plistlib.InvalidFileException, ValueError):
+        return None
+    entry = ((data.get("restrictedBool") or {}).get("allowPasswordAutoFill") or {})
+    return bool(entry.get("value", True))
+
 
 class IOSSimulator(Device):
     platform = "ios"
 
-    def __init__(self, udid: str, evidence: Evidence | None = None, timeout: float = 60):
+    def __init__(self, udid: str, evidence: Evidence | None = None, timeout: float = 60,
+                 soft_keyboard: bool | None = None):
         super().__init__(udid, evidence)
         self.udid = udid
         self.timeout = timeout
+        # None = decide from CAC_IOS_SOFT_KEYBOARD (how the coordinator tells ccdevice in a worker shell).
+        self.soft_keyboard = (os.environ.get("CAC_IOS_SOFT_KEYBOARD", "1") != "0") if soft_keyboard is None else soft_keyboard
         self._idb = which("idb")
+        self.last_type_method: str | None = None
+        self.last_type_warning: str | None = None
 
     # --- low level ------------------------------------------------------------
     def _simctl(self, *args: str, timeout: float | None = None, check: bool = True):
@@ -59,7 +173,12 @@ class IOSSimulator(Device):
         # Right after a launch/restart the snapshot can be empty for a moment; retry briefly.
         deadline = time.monotonic() + 6.0
         while True:
-            r = self._idb_cmd("ui", "describe-all", timeout=90)
+            r = self._idb_cmd("ui", "describe-all", timeout=90, check=False)
+            if not r.ok:
+                msg = (r.stderr or r.stdout).strip()[:400]
+                if "No translation object" in msg:
+                    raise DeviceError(f"idb describe-all failed: {msg}. Likely cause: {COLLAPSED_TREE_HINT}")
+                raise DeviceError(f"idb ui describe-all failed (exit {r.exit_code}): {msg}")
             try:
                 raw = json.loads(r.stdout)
             except json.JSONDecodeError as e:
@@ -67,17 +186,7 @@ class IOSSimulator(Device):
             if len(raw) > 1 or time.monotonic() > deadline:
                 break
             time.sleep(0.5)
-        els = []
-        for i, e in enumerate(raw):
-            f = e.get("frame") or {}
-            els.append(Element(
-                index=i, type=e.get("type") or (e.get("role") or "").replace("AX", ""),
-                label=(e.get("AXLabel") or "").strip(), value=(e.get("AXValue") or "") if isinstance(e.get("AXValue"), str) else str(e.get("AXValue") or ""),
-                identifier=e.get("AXUniqueId") or "", enabled=bool(e.get("enabled", True)),
-                x=float(f.get("x", 0)), y=float(f.get("y", 0)), w=float(f.get("width", 0)), h=float(f.get("height", 0)),
-                extra={"pid": e.get("pid"), "traits": e.get("traits"), "custom_actions": e.get("custom_actions")},
-            ))
-        return els
+        return parse_describe_all(raw)
 
     def screenshot(self, path: Path) -> Path:
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,10 +199,60 @@ class IOSSimulator(Device):
         self._idb_cmd("ui", "tap", str(x), str(y))
 
     def type_text(self, text: str) -> None:
-        # The software keyboard is not exposed in the accessibility snapshot, so give it a
-        # fixed moment to appear after the focusing tap; typing before that drops keys.
-        time.sleep(0.6)
+        """Enter text into the focused field through the pasteboard and the Paste menu, so the software keyboard
+        stays on screen. Typing through idb sends HID key events, and iOS then minimizes the software keyboard
+        for every later app launch. Falls back to HID typing (loudly) when no focused field or Paste item can be
+        found; set CAC_IOS_TYPE=keys to force HID typing."""
+        time.sleep(0.6)   # let the keyboard and caret settle after the focusing tap
+        self.last_type_method, self.last_type_warning = None, None
+        why = "CAC_IOS_TYPE=keys" if self.soft_keyboard else "software_keyboard is off"
+        if self.soft_keyboard and os.environ.get("CAC_IOS_TYPE", "paste").lower() != "keys":
+            status, why = self._paste(text)
+            if status == "ok":
+                self.last_type_method = "paste"
+                return
+            if status == "unverified":
+                # Paste was tapped: typing again could enter the text twice. Report it and let the caller look.
+                self.last_type_method = "paste-unverified"
+                self.last_type_warning = f"{why}; not retyped (it may have landed reformatted): check the field"
+                return
         self._idb_cmd("ui", "text", text)
+        self.last_type_method = "hid-keys"
+        if not self.soft_keyboard:
+            return   # the run asked for HID typing: nothing to warn about
+        self.last_type_warning = (f"typed with HID key events ({why}): iOS now minimizes the software keyboard, so "
+                                  "keyboard-coverage checks are invalid until `ccdevice ios arm-keyboard`")
+
+    def _paste(self, text: str, tries: int = 4) -> tuple[str, str]:
+        """("ok" | "unverified" | "failed", reason). "failed" means nothing was entered, so HID typing is safe;
+        "unverified" means Paste was tapped but the field does not show the text as expected."""
+        if not text:
+            return "ok", "empty text"
+        els = self.tree()
+        field = focused_field(els)
+        if field is None:
+            return "failed", "no focused text field (IsEditing) in the tree"
+        before = field.value or ""
+        r = run(["xcrun", "simctl", "pbcopy", self.udid], input_text=text, timeout=30)
+        if not r.ok:
+            return "failed", f"simctl pbcopy failed: {r.stderr.strip()[:200]}"
+        # Tap at the trailing edge so the caret goes to the end of any existing text, but left of a while-editing
+        # clear (x) button if there is one. A tap on the caret of a focused field toggles the edit menu (Paste,
+        # AutoFill...); it can take two taps to open it.
+        tx, ty = paste_tap_point(field, els)
+        for _ in range(tries):
+            self.tap_xy(tx, ty)
+            time.sleep(0.9)
+            item = paste_item(self.tree())
+            if item is None:
+                continue
+            self.tap_xy(*item.center)
+            time.sleep(0.8)
+            now = focused_field(self.tree())
+            if now is not None and text_landed(now, text, before):
+                return "ok", "pasted"
+            return "unverified", "Paste was tapped but the field does not show the text"
+        return "failed", f"no Paste item appeared after {tries} taps on the field"
 
     def key(self, name: str) -> None:
         n = name.lower()
@@ -112,6 +271,13 @@ class IOSSimulator(Device):
                 self.tap_xy(*back.center); return
             w, h = self.screen_size()
             self.swipe(2, h // 2, int(w * 0.75), h // 2, 250); return
+        if n in SOFT_KEYS and self.soft_keyboard:
+            try:
+                k = soft_key(self.tree(), n)
+            except DeviceError:
+                k = None
+            if k is not None:   # tap the on-screen key: a HID key event would minimize the keyboard
+                self.tap_xy(*k.center); return
         code = HID_KEYS.get(n)
         if code is None:
             if n.isdigit():
@@ -124,6 +290,8 @@ class IOSSimulator(Device):
         self._idb_cmd("ui", "swipe", str(x1), str(y1), str(x2), str(y2), "--duration", str(duration_ms / 1000))
 
     def launch(self, app: str, args: list[str] | None = None) -> dict:
+        if self.soft_keyboard:
+            self.write_keyboard_prefs()   # every launch starts with the software keyboard armed
         t0 = time.monotonic()
         r = self._simctl("launch", "--terminate-running-process", self.udid, app, *(args or []), timeout=60)
         pid = None
@@ -204,22 +372,111 @@ class IOSSimulator(Device):
         return out.stdout[-20000:]
 
     def keyboard_shown(self) -> bool | None:
-        return None  # not observable through the simulator accessibility snapshot
+        """True when the full software keyboard is on screen (its keys are in the tree). A keyboard minimized
+        because iOS saw hardware key events counts as not shown."""
+        try:
+            return bool(keyboard_keys(self.tree()))
+        except DeviceError:
+            return None
+
+    def keyboard_top(self, els: list[Element] | None = None) -> float | None:
+        return keyboard_top(els if els is not None else self.tree())
+
+    # --- software keyboard + password AutoFill ------------------------------------------------
+    def write_keyboard_prefs(self) -> None:
+        for k in KEYBOARD_PREF_KEYS:
+            self._simctl("spawn", self.udid, "defaults", "write", KEYBOARD_PREFS_DOMAIN, k, "-bool", "false", check=False)
+
+    def keyboard_prefs_armed(self) -> bool:
+        vals = [self._simctl("spawn", self.udid, "defaults", "read", KEYBOARD_PREFS_DOMAIN, k, check=False).stdout.strip()
+                for k in KEYBOARD_PREF_KEYS]
+        return all(v == "0" for v in vals)
+
+    def arm_software_keyboard(self, app: str | None = None, launch_args: list[str] | None = None,
+                              reboot: bool = False) -> dict:
+        """Re-arm the software keyboard. The preferences take effect for the next app launch, so the app is
+        relaunched (its session survives, an unsaved form does not); `reboot` restarts the whole simulator."""
+        self.write_keyboard_prefs()
+        steps = ["keyboard prefs written"]
+        if reboot:
+            self._simctl("shutdown", self.udid, check=False, timeout=120)
+            self._simctl("boot", self.udid, check=False, timeout=120)
+            self._simctl("bootstatus", self.udid, "-b", check=False, timeout=240)
+            steps.append("simulator rebooted")
+        if app:
+            self.terminate(app); time.sleep(1.0)
+            self.launch(app, launch_args or []); time.sleep(2.0)
+            steps.append(f"relaunched {app}")
+        armed = self.keyboard_prefs_armed()
+        self._rec("arm-keyboard", ok=armed, steps=steps)
+        return {"ok": armed, "steps": steps}
+
+    def _data_dir(self) -> Path:
+        r = self._simctl("getenv", self.udid, "HOME", check=False)
+        home = r.stdout.strip()
+        return Path(home) if r.ok and home else Path.home() / "Library/Developer/CoreSimulator/Devices" / self.udid / "data"
+
+    def password_autofill_enabled(self) -> bool | None:
+        return autofill_enabled_from_plist(self._data_dir() / AUTOFILL_SETTINGS_PLIST)
+
+    def disable_password_autofill(self) -> dict:
+        """Turn off Settings > General > AutoFill & Passwords > AutoFill Passwords and Passkeys. With it on, every
+        sign-up or sign-in raises a "Save Password?" sheet that runs outside the app: idb then sees only the
+        Application node until the sheet is closed. The setting is stored on disk, so this runs once per
+        simulator. It drives the Settings app (English labels, the toggle's id is AutoFillToggle)."""
+        if self.password_autofill_enabled() is False:
+            return {"ok": True, "changed": False, "detail": "already off"}
+        settings = "com.apple.Preferences"
+        try:
+            self.launch(settings); time.sleep(2.5)
+            for label in ("General", "AutoFill & Passwords"):
+                el = self.wait_for(label, 10, exact=True, type_="Button")
+                if el is None:
+                    return {"ok": False, "changed": False, "detail": f"Settings has no {label!r} button"}
+                self.tap_xy(*el.center); time.sleep(1.5)
+            tog = None
+            for _ in range(10):
+                tog = self.find("AutoFillToggle", exact=True, field_="id", tree=self.tree())
+                if tog is not None:
+                    break
+                time.sleep(0.5)
+            if tog is None:
+                return {"ok": False, "changed": False, "detail": "no AutoFillToggle in Settings"}
+            changed = False
+            if tog.value == "1":
+                self.tap_xy(*self.tap_point(tog, "trailing")); time.sleep(2.0); changed = True
+                tog = self.find("AutoFillToggle", exact=True, field_="id", tree=self.tree()) or tog
+            self._simctl("spawn", self.udid, "defaults", "write", "com.apple.WebUI", "AutoFillPasswords", "-bool", "false", check=False)
+            ok = tog.value == "0" or self.password_autofill_enabled() is False
+            self._rec("disable-password-autofill", ok=ok, changed=changed)
+            return {"ok": ok, "changed": changed, "detail": f"AutoFillToggle={tog.value}"}
+        finally:
+            self.terminate(settings)
 
     def dismiss_keyboard(self) -> None:
-        # Tap a neutral static label (or the top of the screen) to resign the first responder.
-        try:
-            els = self.tree()
-        except DeviceError:
-            els = []
-        neutral = next((e for e in els if e.type == "StaticText" and e.label and e.y > 40), None)
-        if neutral is not None:
-            self.tap_xy(*neutral.center)
-        else:
-            w, _ = self.screen_size()
-            self.tap_xy(w // 2, 60)
-        time.sleep(0.4)
-        self._rec("dismiss-keyboard", shown_after=None)
+        """Resign the first responder by tapping a neutral static label above the keyboard, then the top of the
+        screen; the keyboard's keys are in the tree, so the result is checked rather than assumed."""
+        shown = None
+        for attempt in range(2):
+            try:
+                els = self.tree()
+            except DeviceError:
+                els = []
+            top = keyboard_top(els)
+            if attempt and top is None:
+                break
+            neutral = next((e for e in els if e.type == "StaticText" and e.label and e.y > 40
+                            and "KeyboardKey" not in _traits(e) and (top is None or e.y + e.h < top)), None)
+            if neutral is not None and attempt == 0:
+                self.tap_xy(*neutral.center)
+            else:
+                w, _ = self.screen_size()
+                self.tap_xy(w // 2, 60)
+            time.sleep(0.5)
+            shown = self.keyboard_shown()
+            if not shown:
+                break
+        self._rec("dismiss-keyboard", shown_after=shown)
 
     def screen_size(self) -> tuple[int, int]:
         try:
@@ -304,7 +561,8 @@ class IOSSimulator(Device):
 
     def recover_accessibility(self, app: str | None = None, launch_args: list[str] | None = None) -> dict:
         """The simulator's accessibility bridge can wedge (observed after app (re)installs and XCUITest
-        sessions): every app, even Settings, reports only its Application node.
+        sessions): every app, even Settings, reports only its Application node. The same symptom appears while
+        a system sheet that runs outside the app (Save Password?) is on screen; restarting backboardd closes it.
 
         Recovery, cheapest first: (1) restart the simulator's `backboardd` (the process that owns the
         accessibility server; ~8 s, apps are relaunched), (2) full simulator reboot (~30–40 s). The idb

@@ -100,7 +100,7 @@ def build_platform(platform: str, pcfg: dict, *, checkout: Path, values: dict, l
 def install_platform(platform: str, pcfg: dict, artifact: Path, device_id: str, evidence_dir: Path, sdk: str | None) -> dict:
     ev = Evidence(evidence_dir, platform, device_id)
     if platform == "ios":
-        dev = IOSSimulator(device_id, ev)
+        dev = IOSSimulator(device_id, ev, soft_keyboard=bool(pcfg.get("software_keyboard", True)))
         app = pcfg["bundle_id"]
         dev.uninstall(app)
         ident = dev.install(artifact)

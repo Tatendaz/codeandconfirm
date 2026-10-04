@@ -191,6 +191,10 @@ class AndroidEmulator(Device):
         m = re.search(r"mInputShown=(true|false)", out)
         return (m.group(1) == "true") if m else None
 
+    def keyboard_top(self) -> float | None:
+        """Top edge (pixels) of the visible IME, from the InputMethod window frame plus its content inset."""
+        return parse_ime_top(self._shell("dumpsys", "window", "InputMethod", check=False))
+
     def dismiss_keyboard(self) -> None:
         if self.keyboard_shown():
             self.key("escape")
@@ -328,3 +332,13 @@ def boot_emulator(avd: str, port: int, *, headless: bool = False, log_file: Path
             return {"serial": serial, "pid": proc.pid, "already_running": False}
         time.sleep(2)
     raise DeviceError(f"emulator {avd} did not finish booting within {timeout_s}s")
+
+
+def parse_ime_top(dumpsys_window_ime: str) -> float | None:
+    """`dumpsys window InputMethod` → the y where the keyboard's visible part starts: the window frame's top plus
+    the top of mGivenContentInsets (the IME window is taller than the keys it draws)."""
+    m = re.search(r"(?:^|\s)frame=\[\d+,(\d+)\]", dumpsys_window_ime)
+    if not m:
+        return None
+    inset = re.search(r"mGivenContentInsets=\[\d+,(\d+)\]", dumpsys_window_ime)
+    return float(int(m.group(1)) + (int(inset.group(1)) if inset else 0))

@@ -96,6 +96,12 @@ To make **Codex the lead**, point its instructions at `skills/codeandconfirm/for
 `build`, `env`, artifact path (`app` / `apk`), `bundle_id` + `launch_args` (iOS), `package` + `activity` (Android),
 `device_name` + `device_type` (iOS simulator to create), `avd_name` + `port` (Android emulator to boot).
 
+iOS only: `software_keyboard` (default `true`) keeps the on-screen keyboard. `ccdevice ios type` pastes text
+instead of sending hardware-key events, and every launch re-arms the keyboard; the coordinator passes it to
+workers as `CAC_IOS_SOFT_KEYBOARD`. `CAC_IOS_TYPE=keys` forces HID typing for one shell.
+`disable_password_autofill` (default `true`) turns off password AutoFill once per simulator, because its
+"Save Password?" sheet hides the whole UI from idb. Background: [troubleshooting](troubleshooting.md).
+
 ## `[suites.<name>]`
 `platform` (`ios`, `android`, or `backend`), `command`, `env`, `results = { kind, path }` with kind
 `xcresult` · `junit` · `junit-dir` · `none`.

@@ -154,7 +154,7 @@ def run_perf(coord, cand: dict, opts) -> dict:
         if not bb.ok:
             out["inconclusive"].append(f"{p}: base build failed (exit {bb.exit_code})"); continue
         dev_id = coord.ctx["devices"][p]["id"]
-        dev = IOSSimulator(dev_id) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
+        dev = IOSSimulator(dev_id, soft_keyboard=bool(pcfg.get("software_keyboard", True))) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
         app = pcfg["bundle_id"] if p == "ios" else f"{pcfg['package']}/{pcfg.get('activity', '.MainActivity')}"
         args = pcfg.get("launch_args", []) if p == "ios" else []
         series = {"base": {"startup_ms": [], "memory_kb": []}, "candidate": {"startup_ms": [], "memory_kb": []}}

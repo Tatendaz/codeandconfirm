@@ -34,8 +34,23 @@ why; `report <run-id>` lists every gate check with its detail.
 
 - iOS typing drops characters → the adapter waits 0.6 s after a focusing tap; slow hosts may need more
   (`Device.settle_s`). Autocapitalization can change the first letter; compare case-insensitively.
-- iOS `tree` returns only the `Application` node although the screenshot shows UI → the simulator's accessibility
-  bridge is wedged. Trigger observed on the reference host: **(re)installing an app** while the bridge is in use
+- iOS `tree` returns only the `Application` node right after a sign-up or sign-in, and `describe-point` fails with
+  "No translation object returned" → look at a screenshot first. A **"Save Password?" sheet** (password AutoFill)
+  runs outside the app, so idb cannot see it or the app behind it; closing the sheet restores the tree at once.
+  The coordinator turns AutoFill off once per simulator (Settings > General > AutoFill & Passwords, kept on disk;
+  `ccdevice ios disable-autofill` does the same; `[platforms.ios] disable_password_autofill = false` opts out).
+  Other out-of-process sheets (Sign in with Apple, share sheets) look the same: tap their buttons with `--xy`.
+- iOS keyboard-coverage checks see no keyboard → typing through idb (`idb ui text` / `idb ui key`) sends hardware
+  key events; iOS then records a hardware keyboard (`com.apple.keyboard.preferences`
+  `HardwareKeyboardLastSeen`, `AutomaticMinimizationEnabled`) and minimizes the software keyboard for every app
+  launched afterwards. `ccdevice ios type` therefore pastes through the pasteboard and the Paste menu (it prints
+  `typed (paste)`), `ccdevice ios key return` taps the keyboard's own key, and every `ccdevice ios launch` writes
+  both preferences back to false. After a `typed (hid-keys)` warning run `ccdevice ios arm-keyboard` (rewrites the
+  preferences and relaunches the app; no reboot needed). `ccdevice <platform> kbd "<label>"` reports whether a
+  control is under the keyboard (exit 0 clear, 3 covered, 5 only in the suggestion-bar band, 2 no keyboard, 4 not in the tree).
+  `[platforms.ios] software_keyboard = false` restores HID typing.
+- iOS `tree` returns only the `Application` node although the screenshot shows UI and no sheet is visible → the
+  simulator's accessibility bridge is wedged. Trigger observed on the reference host: **(re)installing an app** while the bridge is in use
   (XCUITest sessions reinstall too); afterwards even Settings reports nothing. This is why `clear-data` wipes the
   data container + keychain instead of reinstalling. `ccdevice ios
   recover-accessibility` restarts the idb companion, reboots the simulator and relaunches the app; the coordinator

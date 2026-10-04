@@ -323,13 +323,14 @@ class Coordinator:
                 res = Reservation(f"ios-device:{ident}", self.run.id, ttl, "dedicated QA device")
                 if not res.try_acquire():
                     cur = res.current(); errors.append(f"{name} reserved by run {cur.owner_run if cur else '?'}"); continue
-                dev = IOSSimulator(ident)
+                dev = IOSSimulator(ident, soft_keyboard=bool(pcfg.get("software_keyboard", True)))
                 ok, why = dev.available()
                 if not ok:
                     res.release(); errors.append(f"{name}: not booted ({why})"); continue
                 if info["created"]:
                     self.run.own("simulator", ident, created=True)
                 self._reservations.append(res)
+                self._prepare_simulator(dev, pcfg)
                 return {"id": ident, "name": name, "os": why}
             raise DeviceError("no free iOS simulator in the pool: " + "; ".join(errors))
         sdk = tool_env(self.cfg)["android_sdk"]
@@ -353,6 +354,23 @@ class Coordinator:
             self._reservations.append(res)
             return {"id": serial, "name": avd, "os": f"Android {rel}"}
         raise DeviceError("no free Android emulator in the pool: " + "; ".join(errors))
+
+    def _prepare_simulator(self, dev: IOSSimulator, pcfg: dict) -> None:
+        """Make the simulator behave like a phone for QA: the software keyboard shows (HID typing by earlier
+        runs or XCUITest hides it for later launches) and password AutoFill is off (its "Save Password?" sheet
+        runs outside the app and hides the whole UI from idb after every sign-up/sign-in). Never fatal."""
+        notes = self.ctx.setdefault("notes", [])
+        if pcfg.get("software_keyboard", True):
+            dev.write_keyboard_prefs()
+            self.log(f"ios: software keyboard armed (prefs ok={dev.keyboard_prefs_armed()})")
+        if pcfg.get("disable_password_autofill", True):
+            try:
+                r = dev.disable_password_autofill()
+            except DeviceError as e:
+                r = {"ok": False, "changed": False, "detail": str(e)}
+            self.log(f"ios: password AutoFill off: ok={r['ok']} changed={r['changed']} ({r['detail']})")
+            if not r["ok"]:
+                notes.append(f"ios: could not turn off password AutoFill ({r['detail']}); a 'Save Password?' sheet may hide the UI from idb after sign-in")
 
     def _phase_checkout(self, cand: dict, opts: ReviewOptions) -> None:
         src = Path(cand["repo_root"])
@@ -549,7 +567,10 @@ class Coordinator:
                 self.ctx.setdefault("installs", {})[p] = rec
                 self.log(f"{p}: re-installed candidate after suites; identity match={rec['identity_match']}")
                 if p == "ios":
-                    dev = IOSSimulator(dev_id)
+                    dev = IOSSimulator(dev_id, soft_keyboard=bool(pcfg.get("software_keyboard", True)))
+                    if pcfg.get("software_keyboard", True):
+                        # The adapter proof and XCUITest typing are HID key events: re-arm before the relaunch.
+                        dev.write_keyboard_prefs()
                     dev.launch(pcfg["bundle_id"], list(pcfg.get("launch_args", [])) + list(pcfg.get("reset_args", [])))
                     time.sleep(4)
                     if not dev.accessibility_healthy():
@@ -636,7 +657,7 @@ class Coordinator:
             pcfg = self.cfg.data["platforms"][p]
             dev_id = self.ctx["devices"][p]["id"]
             try:
-                dev = IOSSimulator(dev_id) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
+                dev = IOSSimulator(dev_id, soft_keyboard=bool(pcfg.get("software_keyboard", True))) if p == "ios" else AndroidEmulator(dev_id, sdk=vals["android_sdk"])
                 app = pcfg["bundle_id"] if p == "ios" else pcfg["package"]
                 st = dev.app_state(app)
                 installed = (st.get("identity") or {}).get("sha256")
@@ -759,6 +780,7 @@ class Coordinator:
             p = self.cfg.data["platforms"]["ios"]
             env.update(CAC_IOS_UDID=vals["ios_udid"] or "", CAC_IOS_BUNDLE=p["bundle_id"], CAC_IOS_LAUNCH_ARGS=" ".join(p.get("launch_args", [])),
                        CAC_IOS_RESET_ARGS=" ".join(p.get("reset_args", [])),
+                       CAC_IOS_SOFT_KEYBOARD="1" if p.get("software_keyboard", True) else "0",
                        CAC_IOS_APP_PATH=(self.ctx.get("builds", {}).get("ios") or {}).get("artifact", ""),
                        CAC_IOS_BASE_APP_PATH=(self.ctx.get("base_builds", {}).get("ios") or {}).get("artifact", "") or "")
         if platform == "android":
@@ -835,8 +857,17 @@ class Coordinator:
                 env_lines.append("- Navigation-bar/toolbar buttons (the + button, Save/Edit/Back in the bar) are NOT in `ccdevice ios tree` on this iOS version. "
                                  "`ccdevice ios bar` lists them (hit-tested), and `ccdevice ios tap '<bar label>'` finds them automatically when the label is not in the tree. "
                                  "Last resort: screenshot pixels ÷ 3 = points (`ccdevice ios scale`), then `--xy X Y`; `ccdevice ios describe-point X Y` tells you what is there.")
-                env_lines.append("- `ccdevice ios launch --reset` wipes the app's data container and the simulator keychain (no reinstall). If `ccdevice ios tree` ever returns only the "
-                                 "Application node while the screenshot shows UI, run `ccdevice ios recover-accessibility` once (~10 s; restarts the simulator's UI server and relaunches the app) and continue; record it in `blockers` only if it fails.")
+                env_lines.append("- `ccdevice ios launch --reset` wipes the app's data container and the simulator keychain (no reinstall). If `ccdevice ios tree` returns only the "
+                                 "Application node while the screenshot shows UI, first look at the screenshot: a system sheet that runs outside the app (\"Save Password?\", Sign in with Apple, a share sheet) "
+                                 "is invisible to idb. Tap its button with `--xy` (points = pixels ÷ `ccdevice ios scale`). Otherwise run `ccdevice ios recover-accessibility` once "
+                                 "(~10 s; restarts the simulator's UI server, which also closes such sheets, and relaunches the app); record it in `blockers` only if it fails.")
+                if self.cfg.get("platforms.ios.software_keyboard", True):
+                    env_lines.append("- The software keyboard is ON for this run, as on a phone. `ccdevice ios type` enters text through the pasteboard and the Paste menu so it stays up; "
+                                     "it prints `typed (paste)`. If it prints a WARNING and `typed (hid-keys)`, iOS has minimized the keyboard: run `ccdevice ios arm-keyboard` "
+                                     "(relaunches the app; the session survives, an unsaved form does not) before any keyboard check. Never call `idb ui text` or `idb ui key` yourself. "
+                                     "`ccdevice ios key return` taps the keyboard's own return/Done key. "
+                                     "`ccdevice ios kbd '<label>'` says whether a control is under the keyboard: exit 0 CLEAR, 3 COVERED, 5 UNCERTAIN (only the suggestion-bar band), 2 no keyboard, 4 not in the tree (decide from a screenshot on 4 and 5). "
+                                     "Check every primary action of a form with the keyboard up.")
             env_lines.append(f"- Test accounts: use `{firebase_real.account_prefix(self.run.id)}{platform}-<n>@example.test` with password `CacTest-1234`. Never use real accounts.")
             bb = (self.ctx.get("base_builds") or {}).get(platform) or {}
             if bb.get("ok"):
