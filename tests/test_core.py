@@ -383,3 +383,33 @@ def test_ios_dismiss_keyboard_checks_the_result(monkeypatch):
     stuck, calls2 = _fake_sim(monkeypatch, [SIGNUP_KEYBOARD_UP + [neutral]])   # never goes away: second, different tap
     stuck.dismiss_keyboard()
     assert len(calls2["taps"]) == 2 and calls2["taps"][1][1] == 60
+
+
+def test_prepare_simulator_arms_keyboard_and_notes_autofill_failure():
+    from types import SimpleNamespace
+    from codeandconfirm.coordinator import Coordinator
+
+    class Dev:
+        def __init__(self, autofill):
+            self.calls, self._autofill = [], autofill
+
+        def write_keyboard_prefs(self):
+            self.calls.append("prefs")
+
+        def keyboard_prefs_armed(self):
+            return True
+
+        def disable_password_autofill(self):
+            self.calls.append("autofill")
+            return self._autofill
+    me = SimpleNamespace(ctx={}, log=lambda m: None)
+    ok = Dev({"ok": True, "changed": True, "detail": "AutoFillToggle=0"})
+    Coordinator._prepare_simulator(me, ok, {})
+    assert ok.calls == ["prefs", "autofill"] and me.ctx["notes"] == []
+    bad = Dev({"ok": False, "changed": False, "detail": "no AutoFillToggle in Settings"})
+    Coordinator._prepare_simulator(me, bad, {})
+    assert any("Save Password" in n for n in me.ctx["notes"])
+    off = Dev({"ok": True, "changed": False, "detail": ""})
+    Coordinator._prepare_simulator(SimpleNamespace(ctx={}, log=lambda m: None), off,
+                                   {"software_keyboard": False, "disable_password_autofill": False})
+    assert off.calls == []
