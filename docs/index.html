@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeAndConfirm: a second agent tests your mobile app before the PR opens</title>
+<meta name="description" content="Claude writes the code. Codex opens your iOS and Android apps on the iOS Simulator and Android Emulator, runs user flows, and returns a PASS, FAIL, BLOCKED, or CANCELLED verdict pinned to the tested commit. Alpha, macOS first, Apache-2.0.">
+<link rel="canonical" href="https://tatendaz.github.io/codeandconfirm/">
+<link rel="alternate" type="text/markdown" href="/codeandconfirm/index.md" title="Markdown version of this page">
+<link rel="describedby" href="/llms.txt">
+<meta name="theme-color" content="#0d0f12">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tatenda Zhou">
+<meta property="og:title" content="CodeAndConfirm: one agent builds, the other tries to break it">
+<meta property="og:description" content="Codex runs user flows on your iOS and Android apps and returns a verdict pinned to the tested commit, before the pull request opens. Alpha, macOS first.">
+<meta property="og:url" content="https://tatendaz.github.io/codeandconfirm/">
+<meta property="og:image" content="https://tatendaz.github.io/codeandconfirm/social-preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="CodeAndConfirm: one agent builds, the other tries to break it.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@realtatendazhou">
+<meta name="twitter:title" content="CodeAndConfirm: one agent builds, the other tries to break it">
+<meta name="twitter:description" content="Codex runs user flows on your iOS and Android apps and returns a verdict pinned to the tested commit, before the pull request opens. Alpha, macOS first.">
+<meta name="twitter:image" content="https://tatendaz.github.io/codeandconfirm/social-preview.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11.5' fill='none' stroke='%2316181d' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preload" as="image" href="img/mascots.webp" type="image/webp">
+<script>
+(function(){
+  try{
+    var q=new URLSearchParams(location.search).get('theme');
+    if(q!=='light'&&q!=='dark'){q=null;}
+    var t=q||localStorage.getItem('cac-theme');
+    if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}
+  }catch(e){}
+})();
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "CodeAndConfirm",
+  "softwareVersion": "0.1.0",
+  "operatingSystem": "macOS",
+  "applicationCategory": "DeveloperApplication",
+  "description": "Mobile QA gate for coding agents. Codex workers run user flows on iOS Simulator and Android Emulator builds of a committed candidate and an evidence gate returns PASS, FAIL, BLOCKED, or CANCELLED for that commit.",
+  "url": "https://tatendaz.github.io/codeandconfirm/",
+  "downloadUrl": "https://github.com/Tatendaz/codeandconfirm",
+  "license": "https://github.com/Tatendaz/codeandconfirm/blob/main/LICENSE",
+  "author": {"@type": "Person", "name": "Tatenda Zhou", "url": "https://tatendaz.github.io/"},
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+}
+</script>
+<style>
+  :root{
+    --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f25; --line:#252a32;
+    --text:#eceef1; --muted:#98a1ac; --accent:#d97757; --link:#e08a6c;
+    --btn-bg:#d97757; --btn-text:#16181d;
+    --fail:#f0876f; --pass:#87d787;
+    --code-bg:#0b0d10; --code-line:#242933; --code-text:#d7dae0; --code-dim:#8b93a1; --code-fail:#f0876f;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --gap-section:clamp(72px,11vw,104px);
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f6f7f8; --panel:#fdfdfe; --panel2:#eef0f2; --line:#dcdfe4;
+      --text:#1b1e24; --muted:#535e6b; --accent:#c2542f; --link:#a8492d;
+      --btn-bg:#b04c2c; --btn-text:#ffffff;
+      --fail:#b3401f; --pass:#1f7a3f;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f7f8; --panel:#fdfdfe; --panel2:#eef0f2; --line:#dcdfe4;
+    --text:#1b1e24; --muted:#535e6b; --accent:#c2542f; --link:#a8492d;
+    --btn-bg:#b04c2c; --btn-text:#ffffff;
+    --fail:#b3401f; --pass:#1f7a3f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{background:var(--bg);color:var(--text);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+  a{color:var(--link);text-decoration:none}
+  a:hover{text-decoration:underline}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+  code{font-family:var(--mono);font-size:.92em;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .topbar{display:flex;justify-content:flex-end;padding-top:22px}
+  .theme-btn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;padding:6px 14px;font:500 13.5px/1.4 inherit;font-family:inherit;cursor:pointer}
+  .theme-btn:hover{color:var(--text);border-color:var(--muted)}
+  .hero .wrap{padding-top:clamp(32px,6vw,56px);padding-bottom:var(--gap-section);display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:center}
+  .hero img{width:100%;height:auto;display:block}
+  h1{font-size:clamp(36px,6vw,54px);letter-spacing:-.025em;line-height:1.05}
+  .tagline{margin-top:20px;font-size:clamp(17px,2.6vw,20px);max-width:34em}
+  .tagline strong{font-weight:650}
+  .tagline .sub{display:block;margin-top:6px;color:var(--muted)}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .btn{display:inline-block;padding:11px 24px;border-radius:8px;font-weight:600;border:1px solid var(--line);line-height:1.4;white-space:nowrap}
+  .btn.primary{background:var(--btn-bg);color:var(--btn-text);border-color:transparent}
+  .btn.primary:hover{text-decoration:none;filter:brightness(1.08)}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{color:var(--text)}
+  .btn.ghost:hover{border-color:var(--accent);text-decoration:none}
+  .fineprint{margin-top:22px;color:var(--muted);font-size:14px}
+  @media (max-width:700px){
+    .hero .wrap{grid-template-columns:1fr;gap:8px}
+    .hero .art{order:-1;max-width:220px}
+  }
+  section{border-top:1px solid var(--line)}
+  section .wrap,footer .wrap{padding-top:var(--gap-section);padding-bottom:var(--gap-section)}
+  h2{font-size:clamp(24px,3.5vw,29px);letter-spacing:-.015em;margin-bottom:22px}
+  h3{font-size:17px;letter-spacing:-.01em}
+  p.lead{max-width:62ch}
+  p.lead + p.lead{margin-top:14px}
+  .dim{color:var(--muted)}
+  .shots{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:500px}
+  .shots figure{margin:0}
+  .shots a{display:block}
+  .shots img{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--line);background:var(--panel2)}
+  .shots figcaption{color:var(--muted);font-size:13.5px;margin-top:10px}
+  .shots figcaption strong{color:var(--text);font-weight:600;display:block}
+  .evidence{margin-top:48px;display:grid;grid-template-columns:1fr;gap:36px}
+  .counts{max-width:440px}
+  .counts{width:100%;border-collapse:collapse;font-size:15px}
+  .counts caption{text-align:left;color:var(--muted);font-size:14px;padding-bottom:10px}
+  .counts th,.counts td{padding:10px 0;border-top:1px solid var(--line);text-align:left;font-weight:400}
+  .counts thead th{color:var(--muted);font-size:13.5px;border-top:0;padding-top:0}
+  .counts thead th.num{text-align:right}
+  .counts td{text-align:right;font-family:var(--mono);width:5.5em}
+  .counts td.bad{color:var(--fail);font-weight:600}
+  .code{background:var(--code-bg);border:1px solid var(--code-line);border-radius:12px;padding:18px 20px;font:13.5px/1.8 var(--mono);color:var(--code-text);overflow-x:auto;white-space:pre}
+  .code .c{color:var(--code-dim)}
+  .code .f{color:var(--code-fail);font-weight:600}
+  .code-label{color:var(--muted);font-size:14px;margin-bottom:10px}
+  .after{margin-top:32px;font-size:15px}
+  .reqs{margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:0 36px;max-width:680px}
+  @media (max-width:640px){.reqs{grid-template-columns:1fr}}
+  .req{padding:14px 0;border-top:1px solid var(--line)}
+  .req h3{font-size:15px}
+  .req p{color:var(--muted);font-size:14.5px;margin-top:4px}
+  .prompt-box{margin-top:32px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px}
+  .prompt-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+  .prompt-label{font-size:14px;color:var(--muted)}
+  .prompt-text{background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:14px 16px;font:14px/1.65 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+  .copy{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:6px 16px;font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;white-space:nowrap}
+  .copy:hover{border-color:var(--accent)}
+  .copy:active{transform:translateY(1px)}
+  .prompt-note{margin-top:14px;color:var(--muted);font-size:14.5px;max-width:62ch}
+  .steps{margin-top:44px}
+  .step{padding:28px 0;border-top:1px solid var(--line)}
+  .step:first-child{border-top:0;padding-top:0}
+  .step p{color:var(--muted);max-width:62ch;margin:6px 0 16px}
+  .step p:last-child{margin-bottom:0}
+  .step .code{margin-top:4px}
+  .warn{margin-top:28px;padding:16px 18px;border-left:3px solid var(--accent);background:var(--panel);border-radius:0 10px 10px 0;font-size:15px;max-width:66ch}
+  .diagram{margin-top:36px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;overflow-x:auto}
+  .diagram img{display:block;width:100%;min-width:560px;height:auto}
+  .diagram .d-light{display:none}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]) .diagram .d-light{display:block}
+    :root:not([data-theme="dark"]) .diagram .d-dark{display:none}
+  }
+  :root[data-theme="light"] .diagram .d-light{display:block}
+  :root[data-theme="light"] .diagram .d-dark{display:none}
+  .diagram-note{color:var(--muted);font-size:13.5px;margin-top:12px}
+  .how{margin-top:40px}
+  .how-row{display:grid;grid-template-columns:190px 1fr;gap:20px;padding:24px 0;border-top:1px solid var(--line)}
+  .how-row:first-child{border-top:none;padding-top:0}
+  .how-row h3{font-size:16px;font-weight:650}
+  .how-row p{color:var(--muted);font-size:15.5px;max-width:56ch}
+  @media (max-width:640px){.how-row{grid-template-columns:1fr;gap:6px;padding:20px 0}}
+  .verdicts{margin-top:14px;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14.5px;color:var(--muted)}
+  .verdicts dt{font-family:var(--mono);font-weight:600;color:var(--text)}
+  .limits{margin-top:8px;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:28px 36px}
+  @media (max-width:640px){.limits{grid-template-columns:1fr;gap:22px}}
+  .limits h3{font-size:16px;font-weight:650}
+  .limits p{color:var(--muted);font-size:15px;margin-top:4px}
+  footer{border-top:1px solid var(--line)}
+  footer .wrap{padding-bottom:72px}
+  .builtby{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px}
+  .builtby .by{font-size:19px;font-weight:650;letter-spacing:-.01em}
+  .builtby .links{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px 22px;font-size:15px}
+  .builtby .help{margin-top:16px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
+  .legal{margin-top:24px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="wrap topbar">
+  <button class="theme-btn" id="theme-toggle" type="button" aria-label="Switch color theme">Light mode</button>
+</div>
+
+<main>
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <h1>CodeAndConfirm</h1>
+      <p class="tagline"><strong>One agent builds, the other tries to break it.</strong>
+      <span class="sub">Codex opens your iOS and Android apps, runs user flows, and returns a verdict pinned to the tested commit.</span></p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Tatendaz/codeandconfirm">View on GitHub</a>
+        <a class="btn ghost" href="#setup">Set it up</a>
+      </div>
+      <p class="fineprint">Alpha, macOS first. A community project, not an official Anthropic or OpenAI product.</p>
+    </div>
+    <div class="art">
+      <img src="img/mascots.webp" width="760" height="676" alt="Two cartoon mascots: the Claude one codes on a laptop while the Codex one inspects a bug with a magnifying glass.">
+    </div>
+  </div>
+</div>
+
+<section id="demo">
+  <div class="wrap">
+    <h2>See it catch a bug</h2>
+    <p class="lead">A demo branch had a planted defect: it sent a second create call, so every new tree was saved twice. Codex tested both apps, compared them with the base build, and found two stored records where there should be one. The gate returned <strong>FAIL</strong>.</p>
+    <div class="shots">
+      <figure>
+        <a href="media/duplicate-tree/ios-candidate.png"><img src="img/ios-candidate.webp" width="600" height="1305" loading="lazy" alt="iOS Simulator after an app restart: IOS Double 0105 and IOS Single 0105 each appear twice in My trees."></a>
+        <figcaption><strong>iOS Simulator</strong>After an app restart. Each name appears twice.</figcaption>
+      </figure>
+      <figure>
+        <a href="media/duplicate-tree/android-candidate.png"><img src="img/android-candidate.webp" width="600" height="1334" loading="lazy" alt="Android Emulator: CAC Android Single and CAC Android Double each appear twice."></a>
+        <figcaption><strong>Android Emulator</strong>After the base comparison and an offline check. Each name appears twice.</figcaption>
+      </figure>
+    </div>
+    <div class="evidence">
+      <table class="counts">
+        <caption>Backend records per create</caption>
+        <thead><tr><th scope="col">Platform, submission</th><th scope="col" class="num">Candidate</th><th scope="col" class="num">Base</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">iOS, single tap</th><td class="bad">2</td><td>1</td></tr>
+          <tr><th scope="row">iOS, rapid double tap</th><td class="bad">2</td><td>1</td></tr>
+          <tr><th scope="row">Android, single tap</th><td class="bad">2</td><td>1</td></tr>
+          <tr><th scope="row">Android, rapid double tap</th><td class="bad">2</td><td>1</td></tr>
+        </tbody>
+      </table>
+      <div>
+        <p class="code-label">Report excerpt, identifiers omitted</p>
+        <div class="code"><span class="f">Gate: FAIL</span>
+Candidate and base: pinned; candidate checkout unmodified
+Installed identity: verified on iOS and Android
+iOS smoke:         0/2 passed
+Android smoke:     1/2 passed
+Mock-server suite: 34/34 passed
+tree.create-once:  <span class="f">FAILED</span> on both platforms
+Blocking findings: 3 reports of the duplicate-create defect</div>
+      </div>
+    </div>
+    <p class="lead dim after">A recorded run from September 6, 2026, with synthetic names and a local Firebase emulator. The three blocking findings came from the review, iOS, and Android workers and describe the same planted defect. Images here are resized copies; select one for the original PNG. The demo shows detection of one injected defect, not coverage of every flow. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/demo.md">Base comparison and provenance</a>.</p>
+  </div>
+</section>
+
+<section id="who">
+  <div class="wrap">
+    <h2>Who it is for</h2>
+    <p class="lead">Developers who let a coding agent change an iOS or Android app and want device-level evidence before they merge. It reviews a committed branch or an existing PR, and the bundled Claude skill can run it before a PR opens.</p>
+    <p class="lead dim">It runs on your Mac against simulators and emulators. You will need:</p>
+    <div class="reqs">
+      <div class="req"><h3>Python 3.11+ and uv</h3><p>To install the CLI.</p></div>
+      <div class="req"><h3>Xcode and idb</h3><p>For the iOS Simulator.</p></div>
+      <div class="req"><h3>Android SDK and your app's JDK</h3><p>For the Android Emulator.</p></div>
+      <div class="req"><h3>Codex CLI, signed in</h3><p>With access to your configured model.</p></div>
+      <div class="req"><h3>Claude Code and gh</h3><p>Optional: the coding-agent workflow and PRs.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="setup">
+  <div class="wrap">
+    <h2>Set it up</h2>
+    <p class="lead">The quickest path is to hand setup to your agent. The <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/agent-setup.md">agent setup guide</a> covers discovery, device setup, configuration, Claude integration, and verification.</p>
+    <div class="prompt-box">
+      <div class="prompt-head">
+        <p class="prompt-label">Give this to your agent</p>
+        <button class="copy" id="copy-btn" type="button">Copy</button>
+      </div>
+      <div class="prompt-text" id="setup-prompt">Set up CodeAndConfirm for this app repository. Read and follow https://github.com/Tatendaz/codeandconfirm/blob/main/docs/agent-setup.md. Inspect the project, install missing tools with my approval, configure QA, and verify a first run. Preserve existing settings. Ask me for logins or decisions you cannot infer. Do not merge or publish anything.</div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <h3>Install by hand</h3>
+        <p>Tested on Apple silicon with iOS Simulator and Android Emulator. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/quickstart.md#1-install">Tool setup</a>.</p>
+        <div class="code">git clone https://github.com/Tatendaz/codeandconfirm.git
+cd codeandconfirm
+uv tool install .
+codeandconfirm --version</div>
+      </div>
+      <div class="step">
+        <h3>Configure your app repository</h3>
+        <p>From the app repository you want to test:</p>
+        <div class="code">cd /path/to/your/app-repo
+codeandconfirm init --devices</div>
+        <p>Edit the generated <code>codeandconfirm.toml</code> for your app's build commands, artifacts, identifiers, suites, backend, and required journeys. Then run <code>codeandconfirm doctor</code>. This setup is required. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/quickstart.md">Walkthrough</a>, <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/examples/firebase-two-app.toml">example config</a>.</p>
+      </div>
+      <div class="step">
+        <h3>Review a branch or an existing PR</h3>
+        <p>Commit your change first. Create <code>criteria.md</code> with the behaviors to check:</p>
+        <div class="code">- Creating a tree produces exactly one row and one backend record.
+- Rapid Create taps do not create duplicates or open an older tree.
+- Created data survives an app restart.</div>
+        <p>From the configured app repository, choose one:</p>
+        <div class="code"><span class="c"># Current branch</span>
+codeandconfirm review --branch "$(git branch --show-current)" --base main --criteria-file criteria.md
+
+<span class="c"># Existing PR, replacing the example URL</span>
+codeandconfirm review --pr https://github.com/owner/repo/pull/123 --criteria-file criteria.md</div>
+        <p>Both use isolated worktrees. Add <code>--merge-candidate</code> to test a PR's merge candidate, or <code>--publish</code> to post the report and commit status. Reports stay local by default. Use <code>codeandconfirm report &lt;run-id&gt;</code> to read the result.</p>
+      </div>
+      <div class="step">
+        <h3>Let Claude request QA</h3>
+        <p>Install the Claude skill first: agent-led setup does it, or follow the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/quickstart.md#6-from-claude-code">manual skill installation</a>. The skill runs the repair loop. Tell Claude:</p>
+        <div class="code" style="white-space:pre-wrap">Implement this change, then use /codeandconfirm before opening the PR.
+Fix blocking findings and rerun QA. Stop after five repair cycles. Do not merge.</div>
+        <p>For enforcement, add the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/hooks/pre-pr-gate.sh">pre-PR hook</a> and the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/server-side-check.md">server-side check</a>. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/skills/codeandconfirm/for-codex-lead.md">Codex can also be the lead</a>.</p>
+      </div>
+    </div>
+    <p class="warn">Trusted-candidate QA runs unsandboxed and executes build scripts. Read the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/trust-boundaries.md">trust boundaries</a> first. Fork PRs get static-only review by default.</p>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lead">The coordinator checks out the candidate, prepares the backend, builds and installs the apps, runs native suites, and starts independent review, iOS, and Android workers. The gate checks their evidence and writes the report.</p>
+    <div class="diagram">
+      <img class="d-dark" src="diagrams/review-pipeline-dark.svg" width="974" height="534" loading="lazy" alt="Pipeline from a committed candidate through an isolated checkout, builds and native tests, parallel review and device QA workers, to an evidence gate and report.">
+      <img class="d-light" src="diagrams/review-pipeline-light.svg" width="974" height="534" loading="lazy" alt="Pipeline from a committed candidate through an isolated checkout, builds and native tests, parallel review and device QA workers, to an evidence gate and report.">
+    </div>
+    <p class="diagram-note">Scrolls sideways on narrow screens. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/review-workflow.md">Workflow and verdict rules</a>.</p>
+    <div class="how">
+      <div class="how-row">
+        <h3>Devices, driven by Codex</h3>
+        <p>Workers operate the apps through <code>ccdevice</code>: accessibility inspection, taps, typing, scrolling, screenshots, and logs. iOS uses <code>simctl</code> and <code>idb</code>; Android uses <code>adb</code> and <code>uiautomator</code>. Input is device-scoped, so both platforms can run in parallel.</p>
+      </div>
+      <div class="how-row">
+        <h3>An evidence gate</h3>
+        <div>
+          <p>The gate checks native-suite results, required journeys, build identity, model identity, and evidence. A worker saying "PASS" is not enough.</p>
+          <dl class="verdicts">
+            <dt>PASS</dt><dd>Required suites and journeys passed with evidence, identities verified, no finding at or above <code>block_severity</code>.</dd>
+            <dt>FAIL</dt><dd>A required test or journey failed, a blocking defect was found, a build failed, or the candidate changed during QA.</dd>
+            <dt>BLOCKED</dt><dd>Required coverage could not be obtained, such as an unavailable device or missing evidence.</dd>
+            <dt>CANCELLED</dt><dd>The run was cancelled.</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="how-row">
+        <h3>Pinned to one commit</h3>
+        <p>Approval records include the candidate SHA, base SHA, and configuration fingerprint. Every new commit needs a new verdict.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="status">
+  <div class="wrap">
+    <h2>Status and limits</h2>
+    <ul class="limits">
+      <li><h3>Alpha, version 0.1.0</h3><p>macOS first. Tested on Apple silicon with iOS Simulator and Android Emulator. Physical devices are not supported yet.</p></li>
+      <li><h3>PASS is not bug-free</h3><p>The <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/sample-report.md">sample report</a> passed its policy with two non-blocking findings and lists coverage gaps.</p></li>
+      <li><h3>Your code reaches a model provider</h3><p>Artifacts stay local, but selected code, UI context, and screenshots go to the provider. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/costs.md">Costs and data handling</a>.</p></li>
+      <li><h3>Performance checks are preliminary</h3><p>Startup and memory comparisons run on an idle host. They do not certify physical-device speed or frame pacing. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/performance.md">Limits</a>.</p></li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="builtby">
+      <p class="by">Built by <a href="https://tatendaz.github.io/">Tatenda Zhou</a></p>
+      <p class="links">
+        <a href="https://tatendaz.github.io/">tatendaz.github.io</a>
+        <a href="https://x.com/realtatendazhou">Follow on X</a>
+        <a href="https://www.linkedin.com/in/tatendazhou">LinkedIn</a>
+        <a href="https://github.com/Tatendaz">GitHub</a>
+      </p>
+      <p class="help">Need help making AI coding agents reliable? <a href="mailto:tatendaz@me.com?subject=AI%20coding%20agents%20(via%20CodeAndConfirm)">tatendaz@me.com</a></p>
+    </div>
+    <p class="legal">Apache-2.0. Source on <a href="https://github.com/Tatendaz/codeandconfirm">GitHub</a>. A community project, not an official Anthropic or OpenAI product. <a href="https://tatendaz.github.io/llms.txt">llms.txt</a></p>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var root=document.documentElement;
+    var toggle=document.getElementById('theme-toggle');
+    function effective(){
+      var t=root.getAttribute('data-theme');
+      if(t==='light'||t==='dark'){return t;}
+      return (window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
+    }
+    function label(){toggle.textContent=effective()==='light'?'Dark mode':'Light mode';}
+    toggle.addEventListener('click',function(){
+      var next=effective()==='light'?'dark':'light';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('cac-theme',next);}catch(e){}
+      label();
+    });
+    if(window.matchMedia){
+      var mq=window.matchMedia('(prefers-color-scheme: light)');
+      if(mq.addEventListener){mq.addEventListener('change',label);}
+    }
+    label();
+
+    var btn=document.getElementById('copy-btn');
+    var src=document.getElementById('setup-prompt');
+    var text=src.textContent;
+    function done(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1600);}
+    function failed(){btn.textContent='Copy failed';setTimeout(function(){btn.textContent='Copy';},1600);}
+    function fallback(){
+      var r=document.createRange();r.selectNodeContents(src);
+      var s=getSelection();s.removeAllRanges();s.addRange(r);
+      var ok=false;
+      try{ok=document.execCommand('copy');}catch(e){ok=false;}
+      s.removeAllRanges();
+      if(ok){done();}else{failed();}
+    }
+    btn.addEventListener('click',function(){
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,fallback);}
+      else{fallback();}
+    });
+  })();
+</script>
+</body>
+</html>
