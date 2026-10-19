@@ -57,7 +57,7 @@
     --text:#eceef1; --muted:#98a1ac; --accent:#d97757; --link:#e08a6c;
     --btn-bg:#d97757; --btn-text:#16181d;
     --fail:#f0876f; --pass:#87d787;
-    --code-bg:#0b0d10; --code-line:#242933; --code-text:#d7dae0; --code-dim:#8b93a1;
+    --code-bg:#0b0d10; --code-line:#242933; --code-text:#d7dae0; --code-dim:#8b93a1; --code-fail:#f0876f;
     --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
     --gap-section:clamp(72px,11vw,104px);
   }
@@ -129,7 +129,7 @@
   .counts td.bad{color:var(--fail);font-weight:600}
   .code{background:var(--code-bg);border:1px solid var(--code-line);border-radius:12px;padding:18px 20px;font:13.5px/1.8 var(--mono);color:var(--code-text);overflow-x:auto;white-space:pre}
   .code .c{color:var(--code-dim)}
-  .code .f{color:var(--fail);font-weight:600}
+  .code .f{color:var(--code-fail);font-weight:600}
   .code-label{color:var(--muted);font-size:14px;margin-bottom:10px}
   .after{margin-top:32px;font-size:15px}
   .reqs{margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:0 36px;max-width:680px}
@@ -308,7 +308,7 @@ codeandconfirm review --pr https://github.com/owner/repo/pull/123 --criteria-fil
       </div>
       <div class="step">
         <h3>Let Claude request QA</h3>
-        <p>After setup, the bundled skill runs the repair loop. Tell Claude:</p>
+        <p>Install the Claude skill first: agent-led setup does it, or follow the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/quickstart.md#6-from-claude-code">manual skill installation</a>. The skill runs the repair loop. Tell Claude:</p>
         <div class="code" style="white-space:pre-wrap">Implement this change, then use /codeandconfirm before opening the PR.
 Fix blocking findings and rerun QA. Stop after five repair cycles. Do not merge.</div>
         <p>For enforcement, add the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/hooks/pre-pr-gate.sh">pre-PR hook</a> and the <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/docs/server-side-check.md">server-side check</a>. <a href="https://github.com/Tatendaz/codeandconfirm/blob/main/skills/codeandconfirm/for-codex-lead.md">Codex can also be the lead</a>.</p>

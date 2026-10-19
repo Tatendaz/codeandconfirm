@@ -106,7 +106,7 @@ Both use isolated worktrees. Add `--merge-candidate` to test a PR's merge candid
 
 ### Let Claude request QA
 
-After setup, the bundled skill runs the repair loop. Tell Claude:
+Install the Claude skill first: agent-led setup does it, or follow the [manual skill installation](https://github.com/Tatendaz/codeandconfirm/blob/main/docs/quickstart.md#6-from-claude-code). The skill runs the repair loop. Tell Claude:
 
 ```text
 Implement this change, then use /codeandconfirm before opening the PR.
