@@ -343,7 +343,7 @@ def is_emulator_process(pid: int, serial: str) -> bool:
     """True when `pid` is still the emulator that serves `serial` (emulator-<port>), not a process that reused its pid."""
     import subprocess
     port = serial.rsplit("-", 1)[-1]
-    r = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True)
+    r = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(pid)], capture_output=True, text=True)
     args = (r.stdout or "").split()
     return "-avd" in args and any(a == "-port" and b == port for a, b in zip(args, args[1:]))
 
