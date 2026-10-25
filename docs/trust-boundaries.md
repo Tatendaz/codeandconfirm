@@ -25,8 +25,8 @@ plugin that executes arbitrary code during `xcodebuild`/`gradlew` — before the
 
 `[trust].external_prs` controls PRs whose head lives in a fork (`isCrossRepository`):
 
-- `static-only` (default): the review worker runs **read-only sandboxed** and no builds, installs,
-  suites or device QA run. Device coverage is reported as **BLOCKED**, never as tested.
+- `static-only` (default): the review worker runs **read-only sandboxed** and no backend, builds,
+  installs, suites, benchmarks or device QA run. Device coverage is reported as **BLOCKED**, never as tested.
 - `refuse`: the run ends BLOCKED immediately.
 
 To test an external PR hands-on you need isolation the local host cannot give you:

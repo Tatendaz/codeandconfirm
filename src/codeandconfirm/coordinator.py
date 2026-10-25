@@ -151,14 +151,22 @@ class Coordinator:
                 raise InfraBlocked(f"repair budget exhausted: cycle {run_.state.repair_cycle} > max {max_cycles}; a human should review this branch")
             if cand.get("trust") == "untrusted" and self.cfg.get("trust.external_prs", "static-only") == "refuse":
                 raise InfraBlocked("candidate comes from a fork and [trust].external_prs = refuse")
+            # static-only: a fork's build scripts, tests and functions never run on this host
+            # (docs/trust-boundaries.md); only the read-only review worker sees the code.
+            static_only = cand.get("trust") == "untrusted"
             self._phase("reserving", self._phase_reserving, cand, opts)
+            if static_only:
+                for p in self._platforms(opts):
+                    self.ctx["platform_status"][p] = {"blocked": "fork PR, [trust].external_prs = static-only: no builds, installs, suites or device QA"}
             self._phase("checkout", self._phase_checkout, cand, opts)
-            self._phase("backend", self._phase_backend, cand, opts)
-            self._phase("build", self._phase_build, cand, opts)
-            self._phase("install", self._phase_install, cand, opts)
-            self._phase("suites", self._phase_suites, cand, opts)
+            if not static_only:
+                self._phase("backend", self._phase_backend, cand, opts)
+                self._phase("build", self._phase_build, cand, opts)
+                self._phase("install", self._phase_install, cand, opts)
+                self._phase("suites", self._phase_suites, cand, opts)
             self._phase("qa", self._phase_qa, cand, opts)
-            self._phase("perf", self._phase_perf, cand, opts)
+            if not static_only:
+                self._phase("perf", self._phase_perf, cand, opts)
             self._phase("gate", self._phase_gate, cand, opts)
         except Cancelled:
             self.ctx["cancelled"] = True
