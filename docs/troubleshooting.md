@@ -69,6 +69,8 @@ why; `report <run-id>` lists every gate check with its detail.
 
 - `codeandconfirm cancel <run-id>` sets the flag, SIGTERMs the coordinator (which kills its workers and
   suites), stops the backend it started, releases its locks, and shuts down an emulator it booted.
+- Every run, however it ends, shuts down an Android emulator it booted. An emulator that was already
+  running stays up. `resume` then reserves and boots the device again.
 - `codeandconfirm locks --clear-stale` removes reservations whose owner process is gone.
 - `codeandconfirm gc --older-than-days 14` removes old runs and their worktrees.
 - Dedicated devices are reused across runs; delete them with `xcrun simctl delete "CodeAndConfirm iPhone"`

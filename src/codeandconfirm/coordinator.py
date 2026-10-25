@@ -758,6 +758,12 @@ class Coordinator:
             bcfg = self.cfg.data.get("backend") or {}
             for co in (self.run.checkout_dir, self.run.base_checkout_dir):
                 firebase_real.scrub_real_configs(bcfg, co, log_file=self.run.artifacts_dir / "backend.log")
+        stopped = stop_owned_emulators(self.run)
+        if stopped:
+            self.log(f"stopped emulator(s) this run booted: {', '.join(stopped)}")
+            # The device is gone, so a later `resume` must reserve (and boot) it again instead of using a dead serial.
+            self.run.state.phases["reserving"]["status"] = "pending"
+            self.run.save()
         for r in self._reservations:
             r.release()
         release_all_for(self.run.id)
@@ -975,6 +981,20 @@ def config_for_run(run_: Run) -> Config:
 
 
 
+def stop_owned_emulators(run_: Run) -> list[str]:
+    """Stop every emulator this run booted (an emulator it found already running is not owned and stays up).
+    Without this a run that ends normally leaves its emulator running for hours. Returns the stopped serials."""
+    stopped = []
+    for serial, meta in list((run_.state.owned.get("emulator") or {}).items()):
+        pid = meta.get("pid")
+        if pid and pid_alive(pid):
+            kill_process_group(pid)
+            stopped.append(serial)
+        run_.disown("emulator", serial)
+        (run_.dir / "pids" / f"{serial}.pid").unlink(missing_ok=True)
+    return stopped
+
+
 def cancel_run(run_id: str, log=eprint) -> dict:
     r = Run(run_id)
     r.request_cancel()
@@ -1008,12 +1028,7 @@ def cancel_run(run_id: str, log=eprint) -> dict:
                                                            log_file=r.artifacts_dir / "backend-cleanup.log", log=log)
         write_json(r.dir / "ctx.json", ctx)
     released = release_all_for(run_id)
-    owned = r.state.owned
-    for serial, meta in (owned.get("emulator") or {}).items():
-        pid = meta.get("pid")
-        if pid and pid_alive(pid):
-            kill_process_group(pid)
-            killed.append(f"emulator:{serial}")
+    killed += [f"emulator:{serial}" for serial in stop_owned_emulators(r)]
     r.reload()
     if not r.state.verdict:
         r.finish("CANCELLED", "cancelled by user")
