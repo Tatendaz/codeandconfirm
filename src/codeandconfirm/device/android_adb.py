@@ -339,9 +339,19 @@ def boot_emulator(avd: str, port: int, *, headless: bool = False, log_file: Path
         raise
 
 
-def is_emulator_process(pid: int, serial: str) -> bool:
-    """True when `pid` is still the emulator that serves `serial` (emulator-<port>), not a process that reused its pid."""
+def process_start(pid: int) -> str:
+    """Start time of `pid` as `ps` prints it. A reused pid has a different start time."""
     import subprocess
+    r = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True)
+    return (r.stdout or "").strip()
+
+
+def is_emulator_process(pid: int, serial: str, started: str | None = None) -> bool:
+    """True when `pid` is still the emulator that serves `serial` (emulator-<port>), not a process that reused its pid.
+    `started` (from process_start at boot) catches a reused pid that is another emulator on the same port."""
+    import subprocess
+    if started and process_start(pid) != started:
+        return False
     port = serial.rsplit("-", 1)[-1]
     r = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(pid)], capture_output=True, text=True)
     args = (r.stdout or "").split()

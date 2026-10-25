@@ -17,7 +17,10 @@ memory. A boot that timed out also left its emulator running, because no run own
 ## What changed
 - New `stop_owned_emulators(run)` in `coordinator.py`. `Coordinator._cleanup` and
   `cancel_run` both use it. It stops only emulators the run booted. An emulator that was
-  already running stays up.
+  already running stays up. Before it kills a pid it checks that the process still has the start
+  time recorded at boot and still runs `-avd … -port <port>`, so a reused pid is never killed.
+- `cancel` stops the emulator before it releases the device lock. A failure to stop the backend
+  no longer aborts the rest of cleanup.
 - After it stops an emulator, cleanup sets the `reserving` phase back to `pending`. A later
   `resume` then reserves and boots the device again, and does not use a dead serial.
 - `boot_emulator` stops the process it started when the boot fails or times out.

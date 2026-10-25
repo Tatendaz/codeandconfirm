@@ -129,3 +129,53 @@ def test_cancel_never_kills_a_process_that_reused_the_emulator_pid(run_):
         assert not any(k.startswith("emulator") for k in res["killed"])
     finally:
         other.kill()
+
+
+def test_cancel_stops_the_emulator_before_it_releases_the_device_lock(run_, monkeypatch):
+    from codeandconfirm import coordinator
+    proc = _fake_emulator()
+    seen = []
+    real_release = coordinator.release_all_for
+
+    def release(run_id):
+        seen.append(proc.poll() is not None or not pid_alive(proc.pid))
+        return real_release(run_id)
+
+    monkeypatch.setattr(coordinator, "release_all_for", release)
+    try:
+        run_.own("emulator", "emulator-5580", pid=proc.pid)
+        run_.state.coordinator_pid = None
+        run_.save()
+        coordinator.cancel_run(run_.id, log=lambda s: None)
+        assert seen == [True]
+    finally:
+        proc.kill()
+
+
+def test_a_different_start_time_means_a_different_process(run_):
+    proc = _fake_emulator()
+    try:
+        assert android_adb.is_emulator_process(proc.pid, "emulator-5580", android_adb.process_start(proc.pid))
+        run_.own("emulator", "emulator-5580", pid=proc.pid, started="Thu Jan  1 00:00:00 1970")
+        assert stop_owned_emulators(run_) == []
+        assert proc.poll() is None
+    finally:
+        proc.kill()
+
+
+def test_cleanup_goes_on_when_the_backend_cannot_be_stopped(run_, monkeypatch):
+    from codeandconfirm import coordinator
+
+    def stop_backend(*a, **kw):
+        raise PermissionError("pid owned by another user")
+
+    monkeypatch.setattr(coordinator, "stop_backend", stop_backend)
+    proc = _fake_emulator()
+    try:
+        run_.own("emulator", "emulator-5580", pid=proc.pid)
+        co = Coordinator(None, run_.dir, log=lambda s: None)
+        co.run = run_
+        co._cleanup()
+        assert _gone(proc)
+    finally:
+        proc.kill()
