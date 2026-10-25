@@ -761,15 +761,9 @@ class Coordinator:
             bcfg = self.cfg.data.get("backend") or {}
             for co in (self.run.checkout_dir, self.run.base_checkout_dir):
                 firebase_real.scrub_real_configs(bcfg, co, log_file=self.run.artifacts_dir / "backend.log")
-        had_emulator = bool(self.run.state.owned.get("emulator"))
         stopped = stop_owned_emulators(self.run)
         if stopped:
             self.log(f"stopped emulator(s) this run booted: {', '.join(stopped)}")
-        if had_emulator:
-            # The device is gone (stopped here or exited on its own), so a later `resume` must reserve (and boot)
-            # it again instead of using a dead serial.
-            self.run.state.phases["reserving"]["status"] = "pending"
-            self.run.save()
         for r in self._reservations:
             r.release()
         release_all_for(self.run.id)
@@ -989,16 +983,22 @@ def config_for_run(run_: Run) -> Config:
 
 def stop_owned_emulators(run_: Run) -> list[str]:
     """Stop every emulator this run booted (an emulator it found already running is not owned and stays up).
-    Without this a run that ends normally leaves its emulator running for hours. Returns the stopped serials."""
+    Without this a run that ends normally leaves its emulator running for hours. Returns the stopped serials.
+    Once an owned emulator is gone (stopped here or exited on its own), `reserving` is set back to pending in the
+    same save, so a later `resume` reserves and boots the device again instead of using a dead serial."""
     stopped = []
-    for serial, meta in list((run_.state.owned.get("emulator") or {}).items()):
+    owned = list((run_.state.owned.get("emulator") or {}).items())
+    for serial, meta in owned:
         pid = meta.get("pid")
         # The pid may belong to another process by now (emulator exited, pid reused): only kill our emulator.
         if pid and pid_alive(pid) and is_emulator_process(pid, serial, meta.get("started")):
             kill_process_group(pid)
             stopped.append(serial)
-        run_.disown("emulator", serial)
+        run_.state.owned.get("emulator", {}).pop(serial, None)
         (run_.dir / "pids" / f"{serial}.pid").unlink(missing_ok=True)
+    if owned:
+        run_.state.phases["reserving"]["status"] = "pending"
+        run_.save()
     return stopped
 
 
@@ -1035,6 +1035,8 @@ def cancel_run(run_id: str, log=eprint) -> dict:
                                                            log_file=r.artifacts_dir / "backend-cleanup.log", log=log)
         write_json(r.dir / "ctx.json", ctx)
     # Stop the emulator before its lock is released, or another run could take the device and then lose it.
+    # Reload first: the coordinator's own cleanup may have saved newer state since the wait above.
+    r.reload()
     killed += [f"emulator:{serial}" for serial in stop_owned_emulators(r)]
     released = release_all_for(run_id)
     r.reload()

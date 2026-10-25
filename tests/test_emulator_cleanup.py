@@ -179,3 +179,18 @@ def test_cleanup_goes_on_when_the_backend_cannot_be_stopped(run_, monkeypatch):
         assert _gone(proc)
     finally:
         proc.kill()
+
+
+def test_cancel_marks_the_device_gone_so_resume_reserves_again(run_):
+    from codeandconfirm.coordinator import cancel_run
+    proc = _fake_emulator()
+    try:
+        run_.own("emulator", "emulator-5580", pid=proc.pid)
+        run_.phase_end("reserving", "ok")
+        run_.state.coordinator_pid = None
+        run_.save()
+        cancel_run(run_.id, log=lambda s: None)
+        assert _gone(proc)
+        assert Run(run_.id).phase_status("reserving") == "pending"
+    finally:
+        proc.kill()
