@@ -103,3 +103,36 @@ def test_role_prompt_tells_the_worker_to_read_less():
     assert "marker that was not on screen before" in role and "do\n  not open the image files" in role and "Work economically" in role
     # the evidence rules are untouched: screenshots are still required
     assert "Take a screenshot at every meaningful state" in role and "Evidence or it did not happen" in role
+
+
+def _drive(tmp_path: Path, trust: str) -> tuple[list[str], dict]:
+    """Run Coordinator.execute with every phase stubbed; return the phases that ran and the ctx."""
+    tmp_path = tmp_path / trust
+    tmp_path.mkdir()
+    co = _co(tmp_path, from_diff=False)
+    ran: list[str] = []
+
+    class FakeRun:
+        id = "run-1"; dir = tmp_path
+        state = type("S", (), {"coordinator_pid": 0, "created_at": "t0", "repair_cycle": 0, "verdict": None})()
+        def save(self): pass
+        def candidate(self): return {"candidate_sha": "a" * 40, "changed_files": [], "trust": trust}
+        def phase_status(self, name): return None
+        def phase_start(self, name): pass
+        def phase_end(self, name, status, **kw): pass
+        def cancel_requested(self): return False
+    for name in ("reserving", "checkout", "backend", "build", "install", "suites", "qa", "perf", "gate"):
+        setattr(co, f"_phase_{name}", lambda cand, opts, name=name: ran.append(name))
+    co._install_signal_handlers = lambda: None
+    co._cleanup = lambda: None
+    co.execute(FakeRun())
+    return ran, co.ctx
+
+
+def test_fork_candidate_runs_no_phase_that_executes_candidate_code(tmp_path):
+    ran, ctx = _drive(tmp_path, "untrusted")
+    assert ran == ["reserving", "checkout", "qa", "gate"]
+    assert all("static-only" in ctx["platform_status"][p]["blocked"] for p in ("ios", "android"))
+    ran, ctx = _drive(tmp_path, "trusted")
+    assert ran == ["reserving", "checkout", "backend", "build", "install", "suites", "qa", "perf", "gate"]
+    assert ctx["platform_status"] == {}
