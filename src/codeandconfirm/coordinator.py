@@ -1016,8 +1016,8 @@ def cancel_run(run_id: str, log=eprint) -> dict:
             if r.state.verdict:
                 break
     for name, pid in r.pids().items():
-        if name == "emulator":
-            continue  # devices are reusable; leave them unless owned+created (handled below)
+        if name.startswith("emulator-"):
+            continue  # pid files are named emulator-<port>; stop_owned_emulators (below) checks the pid before it kills
         if pid_alive(pid):
             kill_process_group(pid)
             killed.append(f"{name}:{pid}")

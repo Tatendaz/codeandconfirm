@@ -114,3 +114,18 @@ def test_cleanup_skips_an_emulator_on_another_port(run_):
         assert proc.poll() is None
     finally:
         proc.kill()
+
+
+def test_cancel_never_kills_a_process_that_reused_the_emulator_pid(run_):
+    from codeandconfirm.coordinator import cancel_run
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
+    try:
+        run_.own("emulator", "emulator-5580", pid=other.pid)
+        run_.record_pid("emulator-5580", other.pid)
+        run_.state.coordinator_pid = None
+        run_.save()
+        res = cancel_run(run_.id, log=lambda s: None)
+        assert other.poll() is None
+        assert not any(k.startswith("emulator") for k in res["killed"])
+    finally:
+        other.kill()
