@@ -27,7 +27,7 @@ from . import firebase_real
 from .claude_worker import ClaudeWorker, resolve_claude
 from .codex_worker import CodexWorker, WorkerSpec, load_role, resolve_codex, PROMPTS_DIR
 from .config import Config, home_dir, render
-from .device.android_adb import AndroidEmulator, boot_emulator, ensure_avd
+from .device.android_adb import AndroidEmulator, boot_emulator, ensure_avd, is_emulator_process
 from .device.base import DeviceError
 from .device.ios_idb import IOSSimulator, ensure_simulator
 from .gate import approve, evaluate, platform_touched, qa_engine, qa_model_requested, repo_key
@@ -758,10 +758,13 @@ class Coordinator:
             bcfg = self.cfg.data.get("backend") or {}
             for co in (self.run.checkout_dir, self.run.base_checkout_dir):
                 firebase_real.scrub_real_configs(bcfg, co, log_file=self.run.artifacts_dir / "backend.log")
+        had_emulator = bool(self.run.state.owned.get("emulator"))
         stopped = stop_owned_emulators(self.run)
         if stopped:
             self.log(f"stopped emulator(s) this run booted: {', '.join(stopped)}")
-            # The device is gone, so a later `resume` must reserve (and boot) it again instead of using a dead serial.
+        if had_emulator:
+            # The device is gone (stopped here or exited on its own), so a later `resume` must reserve (and boot)
+            # it again instead of using a dead serial.
             self.run.state.phases["reserving"]["status"] = "pending"
             self.run.save()
         for r in self._reservations:
@@ -987,7 +990,8 @@ def stop_owned_emulators(run_: Run) -> list[str]:
     stopped = []
     for serial, meta in list((run_.state.owned.get("emulator") or {}).items()):
         pid = meta.get("pid")
-        if pid and pid_alive(pid):
+        # The pid may belong to another process by now (emulator exited, pid reused): only kill our emulator.
+        if pid and pid_alive(pid) and is_emulator_process(pid, serial):
             kill_process_group(pid)
             stopped.append(serial)
         run_.disown("emulator", serial)

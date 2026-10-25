@@ -12,9 +12,11 @@ from codeandconfirm.runstore import Run
 from codeandconfirm.util import pid_alive
 
 
-def _fake_emulator() -> subprocess.Popen:
-    # Same launch shape as boot_emulator: its own session, so it outlives the parent unless someone stops it.
-    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
+def _fake_emulator(port: int = 5580) -> subprocess.Popen:
+    # Same launch shape as boot_emulator: its own session, so it outlives the parent unless someone stops it, and
+    # the `-avd … -port <port>` arguments cleanup checks before it kills a pid.
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)", "-avd", "test", "-port", str(port)],
+                            start_new_session=True)
 
 
 def _gone(proc: subprocess.Popen) -> bool:
@@ -71,9 +73,11 @@ def test_failed_boot_stops_the_emulator(tmp_path, monkeypatch):
     def popen(args, *a, **kw):
         if "-avd" not in args:  # leave every other subprocess (ps, kill checks) alone
             return real_popen(args, *a, **kw)
-        procs.append(_fake_emulator())
+        procs.append(real_popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True))
         return procs[-1]
 
+    (tmp_path / "platform-tools").mkdir()
+    (tmp_path / "platform-tools" / "adb").touch()  # sdk_root needs this marker
     monkeypatch.setattr(subprocess, "Popen", popen)
     monkeypatch.setattr(android_adb.AndroidEmulator, "available", lambda self: (False, "not booted"))
     monkeypatch.setattr(android_adb, "run", lambda *a, **kw: type("R", (), {"stdout": "0"})())
@@ -83,3 +87,30 @@ def test_failed_boot_stops_the_emulator(tmp_path, monkeypatch):
         assert _gone(procs[0])
     finally:
         procs[0].kill()
+
+
+def test_cleanup_never_kills_a_process_that_reused_the_pid(run_):
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
+    try:
+        run_.own("emulator", "emulator-5580", pid=other.pid)   # the emulator exited and its pid was reused
+        run_.phase_end("reserving", "ok")
+        co = Coordinator(None, run_.dir, log=lambda s: None)
+        co.run = run_
+        co._cleanup()
+        assert other.poll() is None
+        r = Run(run_.id)
+        assert "emulator-5580" not in r.state.owned.get("emulator", {})
+        assert r.phase_status("reserving") == "pending"   # the owned device is gone either way
+    finally:
+        other.kill()
+
+
+def test_cleanup_skips_an_emulator_on_another_port(run_):
+    proc = _fake_emulator(port=5582)
+    try:
+        assert stop_owned_emulators(run_) == []
+        run_.own("emulator", "emulator-5580", pid=proc.pid)
+        assert stop_owned_emulators(run_) == []
+        assert proc.poll() is None
+    finally:
+        proc.kill()

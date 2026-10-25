@@ -339,6 +339,15 @@ def boot_emulator(avd: str, port: int, *, headless: bool = False, log_file: Path
         raise
 
 
+def is_emulator_process(pid: int, serial: str) -> bool:
+    """True when `pid` is still the emulator that serves `serial` (emulator-<port>), not a process that reused its pid."""
+    import subprocess
+    port = serial.rsplit("-", 1)[-1]
+    r = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True)
+    args = (r.stdout or "").split()
+    return "-avd" in args and any(a == "-port" and b == port for a, b in zip(args, args[1:]))
+
+
 def parse_ime_top(dumpsys_window_ime: str) -> float | None:
     """`dumpsys window InputMethod` → the y where the keyboard's visible part starts: the window frame's top plus
     the top of mGivenContentInsets (the IME window is taller than the keys it draws)."""
