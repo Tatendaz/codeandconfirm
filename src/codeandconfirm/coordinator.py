@@ -27,7 +27,7 @@ from . import firebase_real
 from .claude_worker import ClaudeWorker, resolve_claude
 from .codex_worker import CodexWorker, WorkerSpec, load_role, resolve_codex, PROMPTS_DIR
 from .config import Config, home_dir, render
-from .device.android_adb import AndroidEmulator, boot_emulator, ensure_avd
+from .device.android_adb import AndroidEmulator, boot_emulator, ensure_avd, is_emulator_process, process_start
 from .device.base import DeviceError
 from .device.ios_idb import IOSSimulator, ensure_simulator
 from .gate import approve, evaluate, platform_touched, qa_engine, qa_model_requested, repo_key
@@ -355,7 +355,7 @@ class Coordinator:
             except DeviceError as e:
                 res.release(); errors.append(f"{avd}: {e}"); continue
             if not info.get("already_running") and info.get("pid"):
-                self.run.own("emulator", serial, pid=info["pid"])
+                self.run.own("emulator", serial, pid=info["pid"], started=process_start(info["pid"]))
                 self.run.record_pid(f"emulator-{port}", info["pid"])
             dev = AndroidEmulator(serial, sdk=sdk)
             rel = dev._shell("getprop", "ro.build.version.release", check=False).strip()
@@ -753,11 +753,17 @@ class Coordinator:
     def _cleanup(self) -> None:
         if not self.run:
             return
-        stop_backend(self.ctx.get("backend"), self.run.id)
+        try:
+            stop_backend(self.ctx.get("backend"), self.run.id)
+        except OSError as e:  # e.g. a reused backend pid owned by another user; the rest of cleanup must still run
+            self.log(f"cleanup: could not stop backend: {type(e).__name__}: {e}")
         if (self.ctx.get("backend") or {}).get("kind") == "firebase-real":
             bcfg = self.cfg.data.get("backend") or {}
             for co in (self.run.checkout_dir, self.run.base_checkout_dir):
                 firebase_real.scrub_real_configs(bcfg, co, log_file=self.run.artifacts_dir / "backend.log")
+        stopped = stop_owned_emulators(self.run)
+        if stopped:
+            self.log(f"stopped emulator(s) this run booted: {', '.join(stopped)}")
         for r in self._reservations:
             r.release()
         release_all_for(self.run.id)
@@ -975,6 +981,27 @@ def config_for_run(run_: Run) -> Config:
 
 
 
+def stop_owned_emulators(run_: Run) -> list[str]:
+    """Stop every emulator this run booted (an emulator it found already running is not owned and stays up).
+    Without this a run that ends normally leaves its emulator running for hours. Returns the stopped serials.
+    Once an owned emulator is gone (stopped here or exited on its own), `reserving` is set back to pending in the
+    same save, so a later `resume` reserves and boots the device again instead of using a dead serial."""
+    stopped = []
+    owned = list((run_.state.owned.get("emulator") or {}).items())
+    for serial, meta in owned:
+        pid = meta.get("pid")
+        # The pid may belong to another process by now (emulator exited, pid reused): only kill our emulator.
+        if pid and pid_alive(pid) and is_emulator_process(pid, serial, meta.get("started")):
+            kill_process_group(pid)
+            stopped.append(serial)
+        run_.state.owned.get("emulator", {}).pop(serial, None)
+        (run_.dir / "pids" / f"{serial}.pid").unlink(missing_ok=True)
+    if owned:
+        run_.state.phases["reserving"]["status"] = "pending"
+        run_.save()
+    return stopped
+
+
 def cancel_run(run_id: str, log=eprint) -> dict:
     r = Run(run_id)
     r.request_cancel()
@@ -992,8 +1019,8 @@ def cancel_run(run_id: str, log=eprint) -> dict:
             if r.state.verdict:
                 break
     for name, pid in r.pids().items():
-        if name == "emulator":
-            continue  # devices are reusable; leave them unless owned+created (handled below)
+        if name.startswith("emulator-"):
+            continue  # pid files are named emulator-<port>; stop_owned_emulators (below) checks the pid before it kills
         if pid_alive(pid):
             kill_process_group(pid)
             killed.append(f"{name}:{pid}")
@@ -1007,13 +1034,11 @@ def cancel_run(run_id: str, log=eprint) -> dict:
                                                            project_id=d.get("project_id", ""), storage_bucket=d.get("storage_bucket"),
                                                            log_file=r.artifacts_dir / "backend-cleanup.log", log=log)
         write_json(r.dir / "ctx.json", ctx)
+    # Stop the emulator before its lock is released, or another run could take the device and then lose it.
+    # Reload first: the coordinator's own cleanup may have saved newer state since the wait above.
+    r.reload()
+    killed += [f"emulator:{serial}" for serial in stop_owned_emulators(r)]
     released = release_all_for(run_id)
-    owned = r.state.owned
-    for serial, meta in (owned.get("emulator") or {}).items():
-        pid = meta.get("pid")
-        if pid and pid_alive(pid):
-            kill_process_group(pid)
-            killed.append(f"emulator:{serial}")
     r.reload()
     if not r.state.verdict:
         r.finish("CANCELLED", "cancelled by user")

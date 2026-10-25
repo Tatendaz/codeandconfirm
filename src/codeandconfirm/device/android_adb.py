@@ -13,7 +13,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from ..util import run, sha256_file, expand
+from ..util import kill_process_group, run, sha256_file, expand
 from .base import Device, DeviceError, Element, Evidence
 
 KEYCODES = {"back": 4, "home": 3, "return": 66, "enter": 66, "escape": 111, "tab": 61, "delete": 67,
@@ -320,18 +320,42 @@ def boot_emulator(avd: str, port: int, *, headless: bool = False, log_file: Path
         args += ["-no-window", "-gpu", "swiftshader_indirect"]
     lf = open(log_file, "ab") if log_file else subprocess.DEVNULL
     proc = subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
-    deadline = time.monotonic() + timeout_s
-    run([adb, "-s", serial, "wait-for-device"], timeout=timeout_s)
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            raise DeviceError(f"emulator exited early (code {proc.returncode}); see {log_file}")
-        out = run([adb, "-s", serial, "shell", "getprop", "sys.boot_completed"], timeout=15).stdout.strip()
-        if out == "1":
-            dev = AndroidEmulator(serial, sdk=str(root))
-            dev.set_test_friendly()
-            return {"serial": serial, "pid": proc.pid, "already_running": False}
-        time.sleep(2)
-    raise DeviceError(f"emulator {avd} did not finish booting within {timeout_s}s")
+    try:
+        deadline = time.monotonic() + timeout_s
+        run([adb, "-s", serial, "wait-for-device"], timeout=timeout_s)
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                raise DeviceError(f"emulator exited early (code {proc.returncode}); see {log_file}")
+            out = run([adb, "-s", serial, "shell", "getprop", "sys.boot_completed"], timeout=15).stdout.strip()
+            if out == "1":
+                dev = AndroidEmulator(serial, sdk=str(root))
+                dev.set_test_friendly()
+                return {"serial": serial, "pid": proc.pid, "already_running": False}
+            time.sleep(2)
+        raise DeviceError(f"emulator {avd} did not finish booting within {timeout_s}s")
+    except BaseException:
+        # Nobody owns an emulator that failed to boot; stop it here or it runs on with no run to clean it up.
+        kill_process_group(proc.pid)
+        raise
+
+
+def process_start(pid: int) -> str:
+    """Start time of `pid` as `ps` prints it. A reused pid has a different start time."""
+    import subprocess
+    r = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True)
+    return (r.stdout or "").strip()
+
+
+def is_emulator_process(pid: int, serial: str, started: str | None = None) -> bool:
+    """True when `pid` is still the emulator that serves `serial` (emulator-<port>), not a process that reused its pid.
+    `started` (from process_start at boot) catches a reused pid that is another emulator on the same port."""
+    import subprocess
+    if started and process_start(pid) != started:
+        return False
+    port = serial.rsplit("-", 1)[-1]
+    r = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(pid)], capture_output=True, text=True)
+    args = (r.stdout or "").split()
+    return "-avd" in args and any(a == "-port" and b == port for a, b in zip(args, args[1:]))
 
 
 def parse_ime_top(dumpsys_window_ime: str) -> float | None:
