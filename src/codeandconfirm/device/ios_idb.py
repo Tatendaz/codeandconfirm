@@ -196,7 +196,9 @@ class IOSSimulator(Device):
         return path
 
     def tap_xy(self, x: int, y: int) -> None:
-        self._idb_cmd("ui", "tap", str(x), str(y))
+        # A zero-duration press is ignored by UISwitch (a SwiftUI Toggle stays off while every
+        # Button around it still reacts); a 100 ms press registers on both.
+        self._idb_cmd("ui", "tap", "--duration", "0.1", str(x), str(y))
 
     def type_text(self, text: str) -> None:
         """Enter text into the focused field through the pasteboard and the Paste menu, so the software keyboard
